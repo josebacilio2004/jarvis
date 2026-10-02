@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">J.A.R.V.I.S.</string>
+    <string name="server_url_prompt">Configurar Servidor Stark</string>
+    <string name="default_server_url">http://192.168.1.21:5000</string>
+</resources>

@@ -1,0 +1,37 @@
+# Secrets and Environment Variables
+.env
+.env.local
+.env.*.local
+*.env
+!.env.example
+
+# Python Virtual Environments & Bytecode
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# SQLite Database & Local Logs
+jarvis.db
+*.log
+
+# Audio generated cache & Screenshots
+static/audio/*.mp3
+static/screenshots/*.png
+
+# Android Studio & Gradle Build Artifacts
+android_app/.gradle/
+android_app/build/
+android_app/app/build/
+android_app/local.properties
+android_app/.idea/
+*.iml
+
+# IDE & Editor caches
+.idea/
+.vscode/
+*.swp
+.DS_Store

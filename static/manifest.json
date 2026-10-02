@@ -1,0 +1,22 @@
+{
+  "name": "J.A.R.V.I.S. OS",
+  "short_name": "JARVIS",
+  "description": "Stark Industries Neural Assistant Interface",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a151b",
+  "theme_color": "#00daf3",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/static/jarvis_core.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/static/jarvis_core.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

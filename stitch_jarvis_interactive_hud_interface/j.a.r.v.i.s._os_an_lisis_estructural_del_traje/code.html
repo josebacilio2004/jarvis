@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>J.A.R.V.I.S. OS | Mark LXXXV Structural Analysis</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&amp;family=Space+Grotesk:wght@600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-surface-variant": "#bac9cc",
+                        "outline-variant": "#3b494c",
+                        "on-secondary-fixed-variant": "#004786",
+                        "surface-variant": "#2c363d",
+                        "surface-container-high": "#212b32",
+                        "on-primary-fixed": "#001f24",
+                        "primary-fixed": "#9cf0ff",
+                        "surface-bright": "#303a42",
+                        "inverse-primary": "#006875",
+                        "tertiary": "#daf0ff",
+                        "on-primary": "#00363d",
+                        "surface-container-low": "#131d23",
+                        "inverse-surface": "#d9e4ed",
+                        "secondary-container": "#3a92f7",
+                        "tertiary-fixed": "#d0e6f4",
+                        "on-tertiary-fixed": "#081e28",
+                        "tertiary-container": "#bed4e2",
+                        "primary-container": "#00e5ff",
+                        "on-secondary-container": "#002a53",
+                        "surface-container-lowest": "#060f16",
+                        "surface-container": "#172127",
+                        "secondary": "#a6c8ff",
+                        "on-tertiary-container": "#485c68",
+                        "on-primary-fixed-variant": "#004f58",
+                        "background": "#0a151b",
+                        "on-error": "#690005",
+                        "on-background": "#d9e4ed",
+                        "on-tertiary-fixed-variant": "#354955",
+                        "on-error-container": "#ffdad6",
+                        "surface-container-highest": "#2c363d",
+                        "surface": "#0a151b",
+                        "inverse-on-surface": "#283239",
+                        "secondary-fixed-dim": "#a6c8ff",
+                        "on-tertiary": "#1f333e",
+                        "outline": "#849396",
+                        "primary-fixed-dim": "#00daf3",
+                        "on-primary-container": "#00626e",
+                        "error": "#ffb4ab",
+                        "primary": "#c3f5ff",
+                        "on-secondary-fixed": "#001c3b",
+                        "error-container": "#93000a",
+                        "tertiary-fixed-dim": "#b4cad7",
+                        "surface-tint": "#00daf3",
+                        "secondary-fixed": "#d5e3ff",
+                        "on-surface": "#d9e4ed",
+                        "surface-dim": "#0a151b",
+                        "on-secondary": "#00315f"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "unit": "4px",
+                        "panel-padding": "12px",
+                        "margin-edge": "32px",
+                        "gutter": "16px"
+                    },
+                    "fontFamily": {
+                        "label-caps": ["JetBrains Mono"],
+                        "body-fixed": ["JetBrains Mono"],
+                        "display-lg": ["Space Grotesk"],
+                        "headline-md": ["Space Grotesk"],
+                        "data-numeral": ["JetBrains Mono"]
+                    },
+                    "fontSize": {
+                        "label-caps": ["10px", {"lineHeight": "1.2", "letterSpacing": "0.2em", "fontWeight": "700"}],
+                        "body-fixed": ["14px", {"lineHeight": "1.6", "letterSpacing": "0em", "fontWeight": "400"}],
+                        "display-lg": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "headline-md": ["24px", {"lineHeight": "1.2", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "data-numeral": ["18px", {"lineHeight": "1", "letterSpacing": "-0.05em", "fontWeight": "500"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            background-color: #0a151b;
+            background-image: 
+                linear-gradient(rgba(0, 229, 255, 0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 229, 255, 0.02) 1px, transparent 1px);
+            background-size: 40px 40px;
+            overflow: hidden;
+        }
+        .scanline-overlay {
+            position: fixed;
+            inset: 0;
+            background: linear-gradient(to bottom, transparent 50%, rgba(0, 229, 255, 0.02) 50%);
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 100;
+        }
+        .hud-bracket {
+            border: 1px solid rgba(0, 218, 243, 0.3);
+            position: relative;
+        }
+        .hud-bracket::before {
+            content: '';
+            position: absolute;
+            top: -1px; left: -1px;
+            width: 10px; height: 10px;
+            border-top: 2px solid #00daf3;
+            border-left: 2px solid #00daf3;
+        }
+        .hud-bracket::after {
+            content: '';
+            position: absolute;
+            bottom: -1px; right: -1px;
+            width: 10px; height: 10px;
+            border-bottom: 2px solid #00daf3;
+            border-right: 2px solid #00daf3;
+        }
+        .rotate-slow {
+            animation: spin 20s linear infinite;
+        }
+        .rotate-reverse {
+            animation: spin-reverse 15s linear infinite;
+        }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes spin-reverse { from { transform: rotate(360deg); } to { transform: rotate(0deg); } }
+    </style>
+</head>
+<body class="text-on-background font-body-fixed selection:bg-primary/30">
+<div class="scanline-overlay"></div>
+<!-- SIDE NAVIGATION (Anchored Left) -->
+<aside class="flex flex-col h-full py-panel-padding fixed left-0 top-0 h-full w-64 bg-background/80 border-r border-primary/30 backdrop-blur-xl shadow-[10px_0_20px_rgba(0,0,0,0.5)] z-40 transition-all duration-300 ease-in-out">
+<div class="px-6 mb-8">
+<h1 class="text-headline-md font-headline-md text-primary tracking-tighter">STARK INDUSTRIES</h1>
+<p class="text-label-caps font-label-caps text-outline-variant">MARK LXXXV ONLINE</p>
+</div>
+<nav class="flex-1 space-y-2">
+<a class="flex items-center px-6 py-3 text-outline hover:bg-primary/5 hover:text-primary-container transition-all" href="#">
+<span class="material-symbols-outlined mr-4" data-icon="shield">shield</span>
+<span class="text-label-caps font-label-caps">Armor</span>
+</a>
+<a class="flex items-center px-6 py-3 text-outline hover:bg-primary/5 hover:text-primary-container transition-all" href="#">
+<span class="material-symbols-outlined mr-4" data-icon="sensors">sensors</span>
+<span class="text-label-caps font-label-caps">Comm</span>
+</a>
+<a class="flex items-center px-6 py-3 text-outline hover:bg-primary/5 hover:text-primary-container transition-all" href="#">
+<span class="material-symbols-outlined mr-4" data-icon="target">target</span>
+<span class="text-label-caps font-label-caps">Weapons</span>
+</a>
+<a class="flex items-center px-6 py-3 text-outline hover:bg-primary/5 hover:text-primary-container transition-all" href="#">
+<span class="material-symbols-outlined mr-4" data-icon="rocket_launch">rocket_launch</span>
+<span class="text-label-caps font-label-caps">Thrusters</span>
+</a>
+<a class="flex items-center px-6 py-3 text-primary bg-primary/10 border-l-4 border-primary transition-all" href="#">
+<span class="material-symbols-outlined mr-4" data-icon="analytics">analytics</span>
+<span class="text-label-caps font-label-caps">Diagnostic</span>
+</a>
+</nav>
+<div class="px-6 mt-auto">
+<button class="w-full py-3 border border-primary/50 text-primary text-label-caps font-label-caps hover:bg-primary/10 transition-all active:scale-95">
+                ENGAGE COMBAT MODE
+            </button>
+<div class="mt-6 flex justify-between text-outline text-label-caps font-label-caps">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[14px]" data-icon="settings">settings</span>
+                    SYSTEM
+                </div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[14px]" data-icon="lan">lan</span>
+                    NETWORK
+                </div>
+</div>
+</div>
+</aside>
+<!-- MAIN HUD CANVAS -->
+<main class="ml-64 min-h-screen relative overflow-hidden flex flex-col">
+<!-- TOP APP BAR -->
+<header class="flex justify-between items-center w-full px-margin-edge py-unit border-b border-primary/20 backdrop-blur-md bg-transparent z-30">
+<div class="flex items-center gap-4">
+<span class="text-headline-md font-headline-md tracking-tighter text-primary animate-pulse">J.A.R.V.I.S. OS</span>
+<div class="h-4 w-px bg-primary/30 mx-2"></div>
+<span class="text-label-caps font-label-caps text-on-surface-variant">STRUCTURAL ANALYSIS_v85.2</span>
+</div>
+<div class="flex items-center gap-6">
+<span class="material-symbols-outlined text-primary cursor-pointer hover:text-primary-container transition-all" data-icon="settings">settings</span>
+<span class="material-symbols-outlined text-primary cursor-pointer hover:text-primary-container transition-all" data-icon="security" style="font-variation-settings: 'FILL' 1;">security</span>
+<span class="material-symbols-outlined text-primary cursor-pointer hover:text-primary-container transition-all" data-icon="bolt">bolt</span>
+</div>
+</header>
+<!-- CENTER BREAKDOWN AREA -->
+<div class="flex-1 relative flex items-center justify-center p-gutter">
+<!-- CENTRAL WIREFRAME HOVER -->
+<div class="relative z-10 w-full max-w-4xl aspect-video flex items-center justify-center">
+<!-- Background Rings -->
+<div class="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
+<div class="w-[600px] h-[600px] border border-dashed border-primary rounded-full rotate-slow"></div>
+<div class="absolute w-[500px] h-[500px] border border-primary/40 rounded-full rotate-reverse"></div>
+<div class="absolute w-[700px] h-[700px] border-[2px] border-primary/10 rounded-full"></div>
+</div>
+<!-- Main Suit Image -->
+<div class="relative group h-[819px]">
+<img class="h-full object-contain filter grayscale invert brightness-150 contrast-125 mix-blend-screen opacity-90 drop-shadow-[0_0_15px_rgba(0,218,243,0.4)]" data-alt="A high-fidelity 3D holographic wireframe of a futuristic red and gold mechanical suit of armor standing in a neutral pose. The suit glows with neon cyan energy lines tracing its complex plating. The background is a dark void filled with subtle data streams and floating tactical icons, creating a sophisticated military aerospace HUD interface aesthetic. The lighting is dominated by the suit's own internal glow." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB5_xX4zLOP-zcE_IMc0H-vlpaE6LtejtMcJkxSZ1OIea4ZTrvgNZNIxvLJTkgYSswnxd6DlKfbTDTN7BC8BW185iHbsDkHgIgGubNZ1rFw5OKmh2Zy9M1othsJO7jacDsG5aTFpzS6i3-PWZgyHwobsXaKN3DI2BthnIs-lfNAMBa2C4sIyQrITGGNb8PDrxtQc-YfkZl-dx79AQQsPwZsZUDZhMowzjjEZ_tFXVPMPe98HW0VW9L6Xlh4VagFZE8GZjNI6DCx-s_6"/>
+<!-- HUD CALLOUTS (Connected to Image via CSS Brackets) -->
+<!-- Helmet -->
+<div class="absolute top-[5%] -left-[200px] w-48 hud-bracket p-panel-padding backdrop-blur-md bg-surface-container/40">
+<div class="flex justify-between items-start mb-2">
+<h3 class="text-label-caps font-label-caps text-primary">HELMET</h3>
+<span class="text-[10px] text-primary-container">ID: MK-NRL</span>
+</div>
+<div class="space-y-1">
+<div class="text-[10px] flex justify-between">
+<span class="text-outline">NEURAL LINK</span>
+<span class="text-primary">ACTIVE</span>
+</div>
+<div class="w-full bg-outline-variant h-1 overflow-hidden">
+<div class="bg-primary h-full w-[98%] shadow-[0_0_5px_#00daf3]"></div>
+</div>
+<div class="text-[10px] text-on-surface-variant italic mt-2">DIAGNOSTIC: OPTIMAL</div>
+</div>
+</div>
+<!-- Shoulder -->
+<div class="absolute top-[20%] -right-[220px] w-48 hud-bracket p-panel-padding backdrop-blur-md bg-surface-container/40">
+<h3 class="text-label-caps font-label-caps text-primary mb-2">SHOULDER UNIT</h3>
+<div class="space-y-2">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[14px]" data-icon="target">target</span>
+<span class="text-[10px] text-outline">MICRO-MISSILES</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[14px]" data-icon="bolt">bolt</span>
+<span class="text-[10px] text-outline">CAPACITY: 100%</span>
+</div>
+</div>
+</div>
+<!-- Chest / Arc Reactor -->
+<div class="absolute top-[40%] -left-[250px] w-56 hud-bracket p-panel-padding backdrop-blur-md bg-surface-container/40">
+<div class="flex items-center gap-3 mb-3">
+<div class="w-10 h-10 border border-primary rounded-full flex items-center justify-center animate-pulse">
+<div class="w-6 h-6 bg-primary/20 rounded-full border border-primary shadow-[0_0_10px_#00daf3]"></div>
+</div>
+<div>
+<h3 class="text-label-caps font-label-caps text-primary">ARC REACTOR</h3>
+<span class="text-[10px] text-outline">CORE STATUS: STABLE</span>
+</div>
+</div>
+<div class="text-[18px] font-data-numeral text-primary mb-1">4.21 GW</div>
+<div class="w-full bg-outline-variant h-1">
+<div class="bg-primary-container h-full w-[88%]"></div>
+</div>
+</div>
+<!-- Arms -->
+<div class="absolute top-[55%] -right-[240px] w-48 hud-bracket p-panel-padding backdrop-blur-md bg-surface-container/40">
+<h3 class="text-label-caps font-label-caps text-primary mb-2">REPULSORS</h3>
+<div class="grid grid-cols-2 gap-2 text-[10px]">
+<div class="p-1 border border-primary/20">LEFT: 100%</div>
+<div class="p-1 border border-primary/20">RIGHT: 100%</div>
+</div>
+<div class="mt-2 text-[10px] text-outline">TEMP: 340 KELVIN</div>
+</div>
+<!-- Torso -->
+<div class="absolute bottom-[25%] -left-[200px] w-48 hud-bracket p-panel-padding backdrop-blur-md bg-surface-container/40">
+<h3 class="text-label-caps font-label-caps text-primary mb-1">LIFE SUPPORT</h3>
+<div class="space-y-1">
+<div class="flex justify-between text-[10px]">
+<span class="text-outline">O2 LEVELS</span>
+<span class="text-primary">100%</span>
+</div>
+<div class="flex justify-between text-[10px]">
+<span class="text-outline">PRESSURE</span>
+<span class="text-primary">1.0 ATM</span>
+</div>
+</div>
+</div>
+<!-- Legs -->
+<div class="absolute bottom-[5%] -right-[220px] w-48 hud-bracket p-panel-padding backdrop-blur-md bg-surface-container/40">
+<h3 class="text-label-caps font-label-caps text-primary mb-2">THRUSTERS</h3>
+<div class="flex flex-col gap-1">
+<div class="flex items-center justify-between">
+<span class="text-[10px] text-outline">PITCH</span>
+<span class="text-[10px] font-data-numeral text-primary">0.00°</span>
+</div>
+<div class="h-1 bg-outline-variant w-full">
+<div class="bg-primary-container h-full w-1/2"></div>
+</div>
+<div class="text-[10px] text-on-surface-variant italic mt-1">DIAGNOSTIC: OPTIMAL</div>
+</div>
+</div>
+</div>
+</div>
+<!-- PERIPHERAL DATA OVERLAYS -->
+<div class="absolute top-margin-edge left-margin-edge space-y-4 z-20">
+<div class="p-4 border-l-2 border-primary bg-primary/5 backdrop-blur-sm w-48">
+<span class="text-label-caps font-label-caps text-primary block mb-2">SYSTEM LOAD</span>
+<div class="text-display-lg font-display-lg text-primary leading-none">12%</div>
+<div class="flex gap-1 mt-2">
+<div class="h-2 w-full bg-primary/40"></div>
+<div class="h-2 w-full bg-primary/40"></div>
+<div class="h-2 w-full bg-primary/10"></div>
+<div class="h-2 w-full bg-primary/10"></div>
+<div class="h-2 w-full bg-primary/10"></div>
+</div>
+</div>
+</div>
+<div class="absolute bottom-margin-edge right-margin-edge space-y-4 z-20 text-right">
+<div class="p-4 border-r-2 border-secondary bg-secondary/5 backdrop-blur-sm w-64">
+<span class="text-label-caps font-label-caps text-secondary block mb-2">NANO-PARTICLE DENSITY</span>
+<div class="text-data-numeral font-data-numeral text-secondary">998,443 / mm³</div>
+<div class="mt-4 h-12 flex items-end justify-end gap-1">
+<div class="w-1 bg-secondary h-[40%]"></div>
+<div class="w-1 bg-secondary h-[60%]"></div>
+<div class="w-1 bg-secondary h-[30%]"></div>
+<div class="w-1 bg-secondary h-[80%]"></div>
+<div class="w-1 bg-secondary h-[100%]"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- BOTTOM NAV BAR -->
+<footer class="fixed bottom-0 left-64 right-0 z-50 flex justify-around items-center px-gutter py-unit border-t border-primary/40 backdrop-blur-lg bg-surface-dim/90 shadow-[0_-5px_15px_rgba(0,218,243,0.2)]">
+<button class="flex flex-col items-center gap-1 group">
+<span class="material-symbols-outlined text-outline-variant group-hover:text-primary transition-all" data-icon="battery_charging_full">battery_charging_full</span>
+<span class="text-label-caps font-label-caps text-outline-variant group-hover:text-primary">Power</span>
+</button>
+<button class="flex flex-col items-center gap-1 group">
+<span class="material-symbols-outlined text-outline-variant group-hover:text-primary transition-all" data-icon="thermostat">thermostat</span>
+<span class="text-label-caps font-label-caps text-outline-variant group-hover:text-primary">Temp</span>
+</button>
+<button class="flex flex-col items-center gap-1 px-4 py-1 bg-primary-container/20 rounded-full animate-bounce-short">
+<span class="material-symbols-outlined text-on-primary-container" data-icon="layers">layers</span>
+<span class="text-label-caps font-label-caps text-on-primary-container">Hull</span>
+</button>
+<button class="flex flex-col items-center gap-1 group">
+<span class="material-symbols-outlined text-outline-variant group-hover:text-primary transition-all" data-icon="sync">sync</span>
+<span class="text-label-caps font-label-caps text-outline-variant group-hover:text-primary">Sync</span>
+</button>
+</footer>
+</main>
+</body></html>

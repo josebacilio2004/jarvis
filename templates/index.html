@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html class="dark" lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<meta name="theme-color" content="#0a151b"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="JARVIS"/>
+<link rel="manifest" href="/static/manifest.json"/>
+<link rel="apple-touch-icon" href="/static/jarvis_core.png"/>
+<title>J.A.R.V.I.S. OS - STARK INDUSTRIES</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --primary: #00daf3;
+    --primary-glow: rgba(0, 218, 243, 0.4);
+    --primary-dim: rgba(0, 218, 243, 0.15);
+    --primary-bright: #c3f5ff;
+    --border-color: rgba(0, 218, 243, 0.3);
+    --grid-color: rgba(0, 218, 243, 0.08);
+  }
+
+  body.combat-mode {
+    --primary: #ff2a44;
+    --primary-glow: rgba(255, 42, 68, 0.5);
+    --primary-dim: rgba(255, 42, 68, 0.2);
+    --primary-bright: #ffd2d7;
+    --border-color: rgba(255, 42, 68, 0.4);
+    --grid-color: rgba(255, 42, 68, 0.12);
+  }
+
+  @keyframes rotate-cw { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+  @keyframes rotate-ccw { from{transform:rotate(360deg)} to{transform:rotate(0)} }
+  @keyframes pulse-glow { 0%,100%{opacity:.8;filter:drop-shadow(0 0 8px var(--primary))} 50%{opacity:1;filter:drop-shadow(0 0 20px var(--primary))} }
+  @keyframes blink-cursor { 0%,100%{opacity:1} 50%{opacity:0} }
+  @keyframes alert-flash { 0%,100%{background:transparent} 50%{background:rgba(255,42,68,0.08)} }
+
+  .animate-cw{animation:rotate-cw 20s linear infinite}
+  .animate-ccw{animation:rotate-ccw 15s linear infinite}
+  .animate-glow{animation:pulse-glow 3s ease-in-out infinite}
+  .scanline{position:fixed;inset:0;background:linear-gradient(to bottom,transparent 50%,rgba(0,0,0,.3) 51%);background-size:100% 4px;pointer-events:none;z-index:9999;opacity:0.6}
+  
+  .hud-bracket{position:relative}
+  .hud-bracket::before{content:'';position:absolute;top:-2px;left:-2px;width:10px;height:10px;border-top:2px solid var(--primary);border-left:2px solid var(--primary);transition:border-color .3s}
+  .hud-bracket::after{content:'';position:absolute;bottom:-2px;right:-2px;width:10px;height:10px;border-bottom:2px solid var(--primary);border-right:2px solid var(--primary);transition:border-color .3s}
+  
+  .glow-border{border:1px solid var(--border-color);box-shadow:inset 0 0 10px var(--primary-dim);transition:all .3s}
+  .material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24}
+
+  /* Chat overlay */
+  .chat-overlay{position:fixed;inset:0;background:rgba(6,15,22,.88);backdrop-filter:blur(12px);z-index:200;display:none;flex-direction:column;align-items:center;justify-content:center;padding:16px}
+  .chat-overlay.active{display:flex}
+  .chat-container{width:100%;max-width:760px;height:75vh;display:flex;flex-direction:column;border:1px solid var(--border-color);background:rgba(10,21,27,.95);box-shadow:0 0 30px rgba(0,0,0,.8)}
+  .chat-messages{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:14px;scroll-behavior:smooth}
+  .chat-messages::-webkit-scrollbar{width:4px}
+  .chat-messages::-webkit-scrollbar-thumb{background:var(--primary);border-radius:2px}
+  
+  .msg{max-width:82%;padding:12px 16px;font-size:13px;line-height:1.6;font-family:'JetBrains Mono',monospace;word-break:break-word;position:relative}
+  .msg-user{align-self:flex-end;border-right:3px solid var(--primary);background:var(--primary-dim);color:#d9e4ed}
+  .msg-bot{align-self:flex-start;border-left:3px solid #f59e0b;background:rgba(245,158,11,.08);color:#d9e4ed}
+  body.combat-mode .msg-bot{border-left-color:#ff2a44;background:rgba(255,42,68,.1)}
+
+  .typing-cursor{display:inline-block;width:8px;height:14px;background:var(--primary);margin-left:4px;vertical-align:middle;animation:blink-cursor .8s infinite}
+
+  .chat-input-bar{display:flex;gap:8px;padding:14px;border-top:1px solid var(--border-color);background:rgba(6,15,22,.6)}
+  .chat-input-bar input{flex:1;background:var(--primary-dim);border:1px solid var(--border-color);padding:10px 14px;color:#d9e4ed;font-family:'JetBrains Mono',monospace;font-size:14px;outline:none;transition:border-color .2s}
+  .chat-input-bar input:focus{border-color:var(--primary);box-shadow:0 0 10px var(--primary-glow)}
+  .chat-input-bar button{background:transparent;border:1px solid var(--border-color);color:var(--primary);padding:0 16px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:2px;text-transform:uppercase;transition:.2s;display:flex;align-items:center;justify-content:center}
+  .chat-input-bar button:hover{background:var(--primary-dim);box-shadow:0 0 12px var(--primary-glow)}
+
+  /* JARVIS Core */
+  .jarvis-core-btn{cursor:pointer;transition:all .3s;position:relative}
+  .jarvis-core-btn:hover{transform:scale(1.06);filter:brightness(1.2)}
+  .jarvis-core-btn.listening .jarvis-img{border-color:#ff2a44!important;box-shadow:0 0 40px rgba(255,42,68,.8)!important}
+  .jarvis-img{width:120px;height:120px;border-radius:50%;border:3px solid var(--primary);box-shadow:0 0 25px var(--primary-glow);object-fit:contain;background:rgba(0,0,0,.7);transition:all .3s}
+
+  /* Audio bars */
+  .audio-bar{width:3px;background:var(--primary);transition:height .15s, background .3s}
+  .audio-bar.speaking{animation:pulse-glow .4s infinite alternate}
+
+  /* Mobile menu */
+  .mobile-menu-btn{display:none;position:fixed;top:10px;left:10px;z-index:70;background:rgba(0,0,0,.7);border:1px solid var(--border-color);color:var(--primary);padding:8px;cursor:pointer;backdrop-filter:blur(6px)}
+
+  @media(max-width:768px){
+    .mobile-menu-btn{display:block}
+    .chat-container{height:82vh}
+    .jarvis-img{width:90px;height:90px}
+    .msg{max-width:92%;font-size:12px}
+    .chat-input-bar input{font-size:16px}
+  }
+</style>
+<script>
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        colors: {
+          primary: "var(--primary)",
+          "primary-dim": "var(--primary-dim)",
+          "primary-bright": "var(--primary-bright)",
+          background: "#0a151b",
+          outline: "#849396"
+        },
+        fontFamily: {
+          "body-fixed": ["JetBrains Mono", "monospace"],
+          "headline-md": ["Space Grotesk", "sans-serif"]
+        }
+      }
+    }
+  }
+</script>
+</head>
+<body class="bg-background text-[#d9e4ed] font-body-fixed min-h-screen overflow-hidden cursor-crosshair">
+<div class="scanline"></div>
+
+<!-- Background Grid -->
+<div class="fixed inset-0 pointer-events-none opacity-20" style="background-image:linear-gradient(var(--grid-color) 1px,transparent 1px),linear-gradient(90deg,var(--grid-color) 1px,transparent 1px);background-size:45px 45px"></div>
+
+<!-- MOBILE MENU BTN -->
+<button class="mobile-menu-btn" onclick="document.querySelector('aside').classList.toggle('!flex')">
+  <span class="material-symbols-outlined">menu</span>
+</button>
+
+<!-- TOP BAR -->
+<header class="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-6 py-2 border-b border-[var(--border-color)] backdrop-blur-md bg-black/30">
+  <div class="flex items-center gap-4">
+    <div class="text-xl font-headline-md font-bold tracking-tighter text-[var(--primary)] animate-pulse flex items-center gap-2">
+      <span class="material-symbols-outlined text-lg">terminal</span>
+      J.A.R.V.I.S. OS
+    </div>
+    <div class="hidden md:flex gap-4 items-center ml-6">
+      <span class="text-[var(--primary)] font-bold text-[10px] cursor-pointer px-2 py-1 border border-[var(--border-color)]" id="hudSystemBadge">SISTEMA: ÓPTIMO</span>
+      <!-- Hands-free toggle button -->
+      <button id="handsFreeBtn" onclick="toggleHandsFree()" class="text-[10px] px-3 py-1 border border-[var(--border-color)] text-[var(--primary)] hover:bg-[var(--primary-dim)] transition-all flex items-center gap-1">
+        <span class="material-symbols-outlined text-xs">mic</span>
+        <span id="handsFreeText">AUTO-ESCUCHA: OFF</span>
+      </button>
+      <a href="/download/jarvis.apk" download class="text-[10px] px-2.5 py-1 border border-[var(--border-color)] text-[var(--primary)] hover:bg-[var(--primary)] hover:text-black transition-all flex items-center gap-1 font-bold" title="Descargar APK para Android">
+        <span class="material-symbols-outlined text-xs">android</span>
+        <span>APK ANDROID</span>
+      </a>
+      <button onclick="openTasksModal()" class="text-[10px] px-2.5 py-1 border border-[var(--border-color)] text-[var(--primary)] hover:bg-[var(--primary-dim)] transition-all flex items-center gap-1 font-bold" title="Matriz de Tareas Stark">
+        <span class="material-symbols-outlined text-xs">checklist</span>
+        <span>TAREAS</span>
+      </button>
+      <span class="text-xs text-neutral-400 hover:text-[var(--primary)] transition-all cursor-pointer" onclick="openChat()">COMUNICACIÓN</span>
+    </div>
+  </div>
+  
+  <div class="flex gap-4 items-center">
+    <div class="flex flex-col items-end mr-2">
+      <span class="text-[10px] text-[var(--primary)]/70 tracking-widest font-bold">AUTORIZACIÓN: T. STARK</span>
+      <span class="text-[10px] text-[var(--primary)] font-bold" id="statusBadge">MARK LXXXV: ONLINE</span>
+    </div>
+    <span class="text-xs font-mono text-[var(--primary)]/80 tabular-nums border border-[var(--border-color)] px-2 py-1" id="clock">00:00:00</span>
+  </div>
+</header>
+
+<!-- SIDEBAR -->
+<aside class="fixed left-0 top-0 h-full w-64 bg-[#0a151b]/95 border-r border-[var(--border-color)] backdrop-blur-xl z-40 hidden md:flex flex-col py-4 mt-14">
+  <div class="px-6 py-6 border-b border-[var(--border-color)]/30">
+    <div class="text-lg font-headline-md font-bold text-[var(--primary)] mb-1">STARK INDUSTRIES</div>
+    <div class="text-[10px] text-neutral-400 tracking-wider">NEURAL LINK ACTIVE</div>
+  </div>
+
+  <nav class="flex-1 px-4 py-4 space-y-2">
+    <div class="flex items-center gap-3 px-3 py-2.5 text-[var(--primary)] bg-[var(--primary-dim)] border-l-4 border-[var(--primary)] cursor-pointer">
+      <span class="material-symbols-outlined text-sm">shield</span>
+      <span class="text-xs font-bold tracking-wider">ARMADURA</span>
+    </div>
+    <div class="flex items-center gap-3 px-3 py-2.5 text-neutral-400 hover:bg-[var(--primary-dim)] hover:text-[var(--primary)] transition-all cursor-pointer" onclick="openChat()">
+      <span class="material-symbols-outlined text-sm">sensors</span>
+      <span class="text-xs font-bold tracking-wider">COMUNICACIÓN</span>
+    </div>
+    <div class="flex items-center gap-3 px-3 py-2.5 text-neutral-400 hover:bg-[var(--primary-dim)] hover:text-[var(--primary)] transition-all cursor-pointer" onclick="openTasksModal()">
+      <span class="material-symbols-outlined text-sm">checklist</span>
+      <span class="text-xs font-bold tracking-wider">MATRIZ TAREAS</span>
+    </div>
+    <a href="/download/jarvis.apk" download class="flex items-center gap-3 px-3 py-2.5 text-neutral-400 hover:bg-[var(--primary-dim)] hover:text-[var(--primary)] transition-all cursor-pointer">
+      <span class="material-symbols-outlined text-sm">android</span>
+      <span class="text-xs font-bold tracking-wider">DESCARGAR APK</span>
+    </a>
+    <div class="flex items-center gap-3 px-3 py-2.5 text-neutral-400 hover:bg-[var(--primary-dim)] hover:text-[var(--primary)] transition-all cursor-pointer" onclick="triggerQuickAction('captura')">
+      <span class="material-symbols-outlined text-sm">screenshot_monitor</span>
+      <span class="text-xs font-bold tracking-wider">CAPTURA PC</span>
+    </div>
+    <div class="flex items-center gap-3 px-3 py-2.5 text-neutral-400 hover:bg-[var(--primary-dim)] hover:text-[var(--primary)] transition-all cursor-pointer" onclick="triggerQuickAction('calculadora')">
+      <span class="material-symbols-outlined text-sm">calculate</span>
+      <span class="text-xs font-bold tracking-wider">CALCULADORA</span>
+    </div>
+    <div class="flex items-center gap-3 px-3 py-2.5 text-neutral-400 hover:bg-[var(--primary-dim)] hover:text-[var(--primary)] transition-all cursor-pointer" onclick="triggerQuickAction('explorador')">
+      <span class="material-symbols-outlined text-sm">folder_open</span>
+      <span class="text-xs font-bold tracking-wider">ARCHIVOS</span>
+    </div>
+  </nav>
+
+  <!-- COMBAT MODE TOGGLE -->
+  <div class="p-4 mb-16">
+    <button id="combatBtn" onclick="toggleCombatMode()" class="w-full py-3.5 border border-[var(--border-color)] bg-[var(--primary-dim)] text-[var(--primary)] text-[10px] font-bold tracking-widest hover:bg-[var(--primary)] hover:text-black transition-all hud-bracket">
+      ACTIVAR MODO COMBATE
+    </button>
+  </div>
+
+  <div class="border-t border-[var(--border-color)]/30 p-4 space-y-1 text-[10px] text-neutral-400">
+    <div class="flex justify-between"><span>HOST:</span><span class="text-[var(--primary)]">LOCAL CORE</span></div>
+    <div class="flex justify-between"><span>MOTOR:</span><span class="text-[var(--primary)]">GEMINI 2.5 + ELEVEN</span></div>
+  </div>
+</aside>
+
+<!-- MAIN HUD CANVAS -->
+<main class="ml-0 md:ml-64 h-screen relative pt-16 flex items-center justify-center">
+  
+  <!-- TOP LEFT STATS: Real Telemetry -->
+  <div class="absolute top-20 left-6 space-y-3 z-10">
+    <div class="hud-bracket p-3 glow-border bg-black/50 backdrop-blur-md w-52">
+      <div class="text-[10px] text-[var(--primary)]/70 tracking-wider mb-1">LOCALIZACIÓN / SISTEMA</div>
+      <div class="text-[var(--primary)] font-bold text-sm tracking-widest" id="telemetryLocation">LIMA, PE</div>
+      <div class="w-full bg-[var(--primary-dim)] h-1 mt-2 overflow-hidden">
+        <div class="bg-[var(--primary)] h-full" id="cpuBar" style="width: 25%"></div>
+      </div>
+      <div class="flex justify-between text-[9px] text-neutral-400 mt-1">
+        <span>CPU USAGE</span>
+        <span class="text-[var(--primary)] font-bold" id="cpuText">--%</span>
+      </div>
+    </div>
+
+    <div class="hud-bracket p-3 glow-border bg-black/50 backdrop-blur-md w-52">
+      <div class="text-[10px] text-[var(--primary)]/70 tracking-wider mb-1">MEMORIA RAM / RED</div>
+      <div class="flex justify-between items-end">
+        <span class="text-[var(--primary)] font-bold text-xl font-mono" id="ramText">-- GB</span>
+        <span class="text-[10px] text-[var(--primary)]/80" id="ramPercent">--%</span>
+      </div>
+      <div class="w-full bg-[var(--primary-dim)] h-1 mt-2 overflow-hidden">
+        <div class="bg-[var(--primary)] h-full" id="ramBar" style="width: 40%"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOP RIGHT STATS: Live Mission Telemetry -->
+  <div class="absolute top-20 right-6 text-right space-y-3 z-10">
+    <div class="hud-bracket p-3 glow-border bg-black/50 backdrop-blur-md w-52 inline-block">
+      <div class="text-[10px] text-[var(--primary)]/70 tracking-wider mb-1">CRONÓMETRO DE MISIÓN</div>
+      <div class="text-[var(--primary)] font-bold text-2xl font-mono tabular-nums" id="missionClock">00:00:00</div>
+    </div>
+
+    <div class="hud-bracket p-3 glow-border bg-black/50 backdrop-blur-md w-52 block">
+      <div class="text-[10px] text-[var(--primary)]/70 tracking-wider mb-1">ENERGÍA / BATERÍA</div>
+      <div class="text-[var(--primary)] font-bold text-lg font-mono" id="batteryText">100% [AC]</div>
+      <div class="flex gap-1 mt-1">
+        <div class="h-1 flex-1 bg-[var(--primary)]"></div>
+        <div class="h-1 flex-1 bg-[var(--primary)]"></div>
+        <div class="h-1 flex-1 bg-[var(--primary)]"></div>
+        <div class="h-1 flex-1 bg-[var(--primary)]"></div>
+        <div class="h-1 flex-1 bg-[var(--primary)]"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CENTRAL ARC REACTOR + JARVIS ICON -->
+  <div class="relative z-10 flex flex-col items-center">
+    <div class="relative w-80 h-80 flex items-center justify-center">
+      <div class="absolute inset-0 border border-dashed border-[var(--primary)]/30 rounded-full animate-cw"></div>
+      <div class="absolute inset-4 border-2 border-dashed border-[var(--primary)]/50 rounded-full animate-ccw"></div>
+      <div class="absolute inset-8 border border-[var(--primary)]/20 rounded-full"></div>
+
+      <!-- JARVIS CORE — Click to activate -->
+      <div class="jarvis-core-btn" id="jarvisBtn" onclick="openChat()" title="Hablar con J.A.R.V.I.S.">
+        <img src="/static/jarvis_core.png" class="jarvis-img animate-glow" id="jarvisImg" alt="J.A.R.V.I.S.">
+      </div>
+    </div>
+
+    <div class="text-[var(--primary)] font-bold tracking-[0.4em] text-xs mt-3" id="coreBadge">NÚCLEO NEURONAL ACTIVO</div>
+
+    <!-- Telemetry around core -->
+    <div class="absolute -left-36 top-1/2 -translate-y-1/2 space-y-2 hidden sm:block">
+      <div class="flex items-center gap-2 text-right">
+        <span class="text-[var(--primary)] text-[10px]">INTEGRIDAD</span>
+        <span class="text-[var(--primary-bright)] font-bold font-mono" id="integrityVal">99%</span>
+      </div>
+      <div class="flex items-center gap-2 text-right">
+        <span class="text-[var(--primary)] text-[10px]">TEMP. TRAJE</span>
+        <span class="text-[var(--primary-bright)] font-bold font-mono">38°C</span>
+      </div>
+    </div>
+
+    <div class="absolute -right-36 top-1/2 -translate-y-1/2 space-y-2 hidden sm:block">
+      <div class="flex items-center gap-2">
+        <span class="text-[var(--primary-bright)] font-bold font-mono" id="latencyVal">0.2s</span>
+        <span class="text-[var(--primary)] text-[10px]">LATENCIA</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="text-[var(--primary-bright)] font-bold font-mono">12.8TB</span>
+        <span class="text-[var(--primary)] text-[10px]">FLUJO RED</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM RIGHT: Suit Analysis -->
+  <div class="absolute bottom-16 right-6 w-72 hidden md:block z-10">
+    <div class="hud-bracket bg-black/60 p-4 border border-[var(--border-color)] backdrop-blur-lg">
+      <div class="flex justify-between items-center mb-3">
+        <div class="text-xs text-[var(--primary)] font-bold tracking-wider">ANÁLISIS DE ESTRUCTURA</div>
+        <span class="material-symbols-outlined text-[var(--primary)] text-sm animate-spin">sync</span>
+      </div>
+      <div class="relative h-60 flex items-center justify-center">
+        <img class="h-full object-contain mix-blend-screen opacity-80 hover:opacity-100 transition-opacity cursor-pointer" src="/static/ironman.jpg" alt="Mark VII"/>
+        <!-- Hotspots -->
+        <div class="absolute top-4 left-1/2 -translate-x-1/2 w-4 h-4 border border-[var(--primary)] rounded-full hover:bg-[var(--primary)]/40 transition-colors cursor-pointer group">
+          <div class="absolute left-6 top-0 hidden group-hover:block bg-black/95 p-2 border border-[var(--primary)] text-[10px] whitespace-nowrap z-50">CASCO: 99% INTEGRIDAD</div>
+        </div>
+        <div class="absolute top-20 left-1/2 -translate-x-1/2 w-8 h-8 border border-[var(--primary)] rounded-full hover:bg-[var(--primary)]/40 transition-colors cursor-pointer group">
+          <div class="absolute left-10 top-0 hidden group-hover:block bg-black/95 p-2 border border-[var(--primary)] text-[10px] whitespace-nowrap z-50">REACTOR ARC: ÓPTIMO</div>
+        </div>
+      </div>
+      <div class="mt-3 space-y-1">
+        <div class="flex justify-between text-[10px] text-[var(--primary)]/80"><span>ARMADURA</span><span id="armorVal">100.0</span></div>
+        <div class="h-1 bg-[var(--primary-dim)] w-full"><div class="h-full bg-[var(--primary)] w-full"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM LEFT: Weapons & Status -->
+  <div class="absolute bottom-16 left-6 w-72 hidden md:block space-y-3 z-10">
+    <div class="hud-bracket bg-black/50 p-3 border border-[var(--border-color)] backdrop-blur-sm">
+      <div class="text-[10px] text-[var(--primary)]/70 mb-2 font-bold tracking-wider">ARMAMENTO & REPULSORES</div>
+      <div class="flex gap-2 h-14 items-end">
+        <div class="flex-1 bg-[var(--primary-dim)] h-1/2"></div>
+        <div class="flex-1 bg-[var(--primary-dim)] h-3/4"></div>
+        <div class="flex-1 bg-[var(--primary)] h-full"></div>
+        <div class="flex-1 bg-[var(--primary-dim)] h-2/3"></div>
+        <div class="flex-1 bg-[var(--primary)]/60 h-1/3"></div>
+        <div class="flex-1 bg-[var(--primary-dim)] h-1/2"></div>
+      </div>
+      <div class="flex justify-between mt-2 text-[10px] text-[var(--primary)]">
+        <span>REPULSORES</span>
+        <span class="font-bold">LISTOS</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Audio visualizer bars -->
+  <div class="fixed bottom-24 left-1/2 -translate-x-1/2 w-52 flex justify-center items-end gap-1 opacity-70 z-10" id="audioBars">
+    <div class="audio-bar h-2"></div><div class="audio-bar h-4"></div><div class="audio-bar h-7"></div>
+    <div class="audio-bar h-11"></div><div class="audio-bar h-14"></div><div class="audio-bar h-8"></div>
+    <div class="audio-bar h-5"></div><div class="audio-bar h-9"></div><div class="audio-bar h-3"></div>
+  </div>
+</main>
+
+<!-- ===== CHAT OVERLAY CON STREAMING TYPEWRITER ===== -->
+<div class="chat-overlay" id="chatOverlay">
+  <div class="mb-3 text-center">
+    <img src="/static/jarvis_core.png" class="jarvis-img mx-auto mb-2 cursor-pointer" id="chatJarvisImg" onclick="startListening()" title="Clic para hablar">
+    <div class="text-xs font-bold text-[var(--primary)] tracking-[.3em]">J.A.R.V.I.S. INTERFAZ NEURONAL</div>
+  </div>
+
+  <div class="chat-container hud-bracket">
+    <!-- Chat Header Controls -->
+    <div class="px-4 py-2 border-b border-[var(--border-color)]/40 flex justify-between items-center text-[10px] text-neutral-400">
+      <span class="text-[var(--primary)] font-bold flex items-center gap-1">
+        <span class="w-2 h-2 rounded-full bg-[var(--primary)] animate-pulse"></span>
+        CANAL CIFRADO STARK-NET
+      </span>
+      <div class="flex gap-2">
+        <button onclick="clearChatHistory()" class="hover:text-[var(--primary)] transition-colors" title="Limpiar conversación">[ LIMPIAR MEMORIA ]</button>
+        <button onclick="closeChat()" class="hover:text-[var(--primary)] transition-colors">[ CERRAR ]</button>
+      </div>
+    </div>
+
+    <!-- Messages Window -->
+    <div class="chat-messages" id="chatBox">
+      <!-- Loaded dynamically from SQLite or welcome message -->
+    </div>
+
+    <!-- Typing indicator -->
+    <div id="typing" class="text-[10px] text-[var(--primary)] px-4 py-1 hidden flex items-center gap-2">
+      <span class="w-1.5 h-1.5 rounded-full bg-[var(--primary)] animate-ping"></span>
+      JARVIS procesando flujo neuronal...
+    </div>
+
+    <!-- Input Bar -->
+    <div class="chat-input-bar">
+      <input type="text" id="userInput" placeholder="Introduzca comando o consulte, Señor..." onkeypress="if(event.key==='Enter')sendStream()">
+      <button onclick="startListening()" id="micBtn" title="Hablar por micrófono">
+        <span class="material-symbols-outlined text-sm">mic</span>
+      </button>
+      <button onclick="sendStream()" id="sendBtn">TRANSMITIR</button>
+    </div>
+  </div>
+
+  <button onclick="closeChat()" class="mt-3 text-[10px] text-[var(--primary)]/60 hover:text-[var(--primary)] transition-colors tracking-widest">[ ESC PARA CERRAR ]</button>
+</div>
+
+<!-- ===== MATRIZ DE TAREAS & PROTOCOLOS STARK OVERLAY ===== -->
+<div class="chat-overlay" id="tasksOverlay">
+  <div class="chat-container hud-bracket" style="max-width: 640px; height: 75vh;">
+    <!-- Tasks Header -->
+    <div class="px-4 py-3 border-b border-[var(--border-color)]/60 flex justify-between items-center text-[11px] bg-black/40">
+      <span class="text-[var(--primary)] font-bold flex items-center gap-2">
+        <span class="material-symbols-outlined text-base">checklist</span>
+        MATRIZ DE TAREAS & PROTOCOLOS STARK
+      </span>
+      <div class="flex gap-2">
+        <button onclick="loadTasks()" class="hover:text-[var(--primary)] transition-colors text-[10px]" title="Recargar">[ ACTUALIZAR ]</button>
+        <button onclick="closeTasksModal()" class="hover:text-[var(--primary)] transition-colors text-[10px]">[ CERRAR ]</button>
+      </div>
+    </div>
+
+    <!-- Tasks List Window -->
+    <div class="flex-1 overflow-y-auto p-4 space-y-2" id="tasksContainer">
+      <!-- Injected dynamically -->
+    </div>
+
+    <!-- Add Task Input Bar -->
+    <div class="chat-input-bar">
+      <input type="text" id="newTaskInput" placeholder="Añadir nuevo protocolo o tarea..." onkeypress="if(event.key==='Enter')submitNewTask()">
+      <button onclick="submitNewTask()">AÑADIR</button>
+    </div>
+  </div>
+
+  <button onclick="closeTasksModal()" class="mt-3 text-[10px] text-[var(--primary)]/60 hover:text-[var(--primary)] transition-colors tracking-widest">[ ESC PARA CERRAR ]</button>
+</div>
+
+<!-- ===== BOTÓN FLOTANTE MÓVIL (QUICK-TALK ARC REACTOR FAB) ===== -->
+<div id="mobileQuickTalkFab" onclick="quickVoiceTrigger()" class="fixed bottom-6 right-6 md:hidden z-50 flex items-center justify-center w-14 h-14 rounded-full bg-[#0a151b]/95 border-2 border-[var(--primary)] shadow-[0_0_25px_var(--primary-glow)] cursor-pointer hover:scale-110 active:scale-95 transition-all" title="JARVIS Voz Rápida">
+  <span class="material-symbols-outlined text-2xl text-[var(--primary)] animate-pulse" id="fabMicIcon">mic</span>
+</div>
+
+<!-- Audio elements -->
+<audio id="jarvisAudio" preload="auto"></audio>
+<audio id="ambientMusicPlayer" preload="auto"></audio>
+
+<!-- STARK AMBIENT AUDIO DOCK -->
+<div id="ambientDock" class="fixed bottom-4 right-6 z-50 bg-[#0a151b]/95 border border-[var(--primary)] backdrop-blur-md px-4 py-2.5 rounded hud-bracket shadow-[0_0_20px_var(--primary-glow)] hidden items-center gap-4 transition-all">
+  <div class="flex items-center gap-3">
+    <span class="material-symbols-outlined text-base text-[var(--primary)] animate-pulse">equalizer</span>
+    <div class="flex flex-col">
+      <span class="text-[9px] text-[var(--primary)]/70 tracking-widest font-bold">AUDIO AMBIENTAL STARK</span>
+      <span class="text-xs text-[var(--primary)] font-bold truncate max-w-[220px]" id="ambientSongTitle">--</span>
+    </div>
+  </div>
+  <div class="flex items-center gap-2">
+    <button onclick="toggleAmbientMusic()" id="ambientPlayBtn" class="px-2 py-1 border border-[var(--border-color)] text-[var(--primary)] hover:bg-[var(--primary-dim)] text-xs flex items-center justify-center font-bold" title="Pausar / Reanudar">
+      <span class="material-symbols-outlined text-sm" id="ambientIcon">pause</span>
+    </button>
+    <a id="ambientExternalLink" href="#" target="_blank" class="px-2 py-1 border border-[var(--border-color)] text-[var(--primary)] hover:bg-[var(--primary-dim)] text-xs flex items-center justify-center font-bold" title="Abrir en YouTube">
+      <span class="material-symbols-outlined text-sm">open_in_new</span>
+    </a>
+    <button onclick="stopAmbientMusic()" class="px-2 py-1 border border-[var(--border-color)] text-red-400 hover:bg-red-500/20 text-xs flex items-center justify-center font-bold" title="Detener audio">
+      <span class="material-symbols-outlined text-sm">close</span>
+    </button>
+  </div>
+</div>
+
+<script>
+// ==========================================
+// 1. CLOCK & REAL TELEMETRY
+// ==========================================
+function updateClock() {
+  const d = new Date();
+  const t = d.toLocaleTimeString('es-PE', { hour12: false });
+  document.getElementById('clock').textContent = t;
+  document.getElementById('missionClock').textContent = t;
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+async function fetchTelemetry() {
+  try {
+    const res = await fetch('/telemetry');
+    if (!res.ok) return;
+    const data = await res.json();
+    
+    // CPU
+    if (data.cpu_percent !== undefined) {
+      document.getElementById('cpuText').textContent = data.cpu_percent + '%';
+      document.getElementById('cpuBar').style.width = Math.min(data.cpu_percent, 100) + '%';
+    }
+    // RAM
+    if (data.ram_percent !== undefined) {
+      document.getElementById('ramPercent').textContent = data.ram_percent + '%';
+      document.getElementById('ramText').textContent = `${data.ram_used_gb} / ${data.ram_total_gb} GB`;
+      document.getElementById('ramBar').style.width = data.ram_percent + '%';
+    }
+    // Battery
+    if (data.battery_percent !== undefined) {
+      const state = data.power_plugged ? '[AC ONLINE]' : '[BATTERY]';
+      document.getElementById('batteryText').textContent = `${data.battery_percent}% ${state}`;
+    }
+  } catch (e) {
+    // Silent fail
+  }
+}
+setInterval(fetchTelemetry, 3000);
+fetchTelemetry();
+
+// ==========================================
+// 2. CHAT OVERLAY & SQLITE PERSISTENCE
+// ==========================================
+function openChat() {
+  document.getElementById('chatOverlay').classList.add('active');
+  document.getElementById('userInput').focus();
+  loadHistory();
+}
+
+function closeChat() {
+  document.getElementById('chatOverlay').classList.remove('active');
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeChat();
+});
+
+let historyLoaded = false;
+async function loadHistory() {
+  if (historyLoaded) return;
+  try {
+    const res = await fetch('/history');
+    const data = await res.json();
+    const box = document.getElementById('chatBox');
+    
+    if (data.messages && data.messages.length > 0) {
+      box.innerHTML = '';
+      data.messages.forEach(m => {
+        const isBot = m.role === 'jarvis';
+        const formatted = formatMarkdown(m.content);
+        box.innerHTML += `<div class="msg ${isBot ? 'msg-bot' : 'msg-user'}">${formatted}</div>`;
+      });
+    } else {
+      box.innerHTML = `<div class="msg msg-bot">Sistemas en línea, Señor. Todos los protocolos están activos y vinculados con Gemini 2.5 Flash. ¿Cuáles son sus órdenes?</div>`;
+    }
+    box.scrollTop = box.scrollHeight;
+    historyLoaded = true;
+  } catch (e) {
+    console.error('Error cargando historial:', e);
+  }
+}
+
+async function clearChatHistory() {
+  if (!confirm('¿Desea reiniciar la memoria neuronal de JARVIS, Señor?')) return;
+  try {
+    await fetch('/reset', { method: 'POST' });
+    document.getElementById('chatBox').innerHTML = `<div class="msg msg-bot">Memoria y registros reiniciados, Señor. Todos los sistemas en estado inicial.</div>`;
+    speakNativeOrNeural('Memoria reiniciada, Señor.');
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+function formatMarkdown(text) {
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '<strong style="color:var(--primary)">$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/`(.*?)`/g, '<code style="background:rgba(255,255,255,.1);padding:2px 4px;border-radius:2px">$1</code>')
+    .replace(/\n/g, '<br>');
+}
+
+// ==========================================
+// 3. NEURAL TTS & AUDIO PLAYBACK
+// ==========================================
+const audioElement = document.getElementById('jarvisAudio');
+
+function setBarsSpeaking(active) {
+  document.querySelectorAll('.audio-bar').forEach(b => {
+    if (active) b.classList.add('speaking');
+    else b.classList.remove('speaking');
+  });
+}
+
+audioElement.onplay = () => setBarsSpeaking(true);
+audioElement.onended = () => setBarsSpeaking(false);
+audioElement.onerror = () => setBarsSpeaking(false);
+
+async function playAudioUrl(url) {
+  if (!url) return;
+  try {
+    audioElement.src = url;
+    await audioElement.play();
+  } catch (e) {
+    console.warn('Audio play failed, fallback to native SpeechSynthesis:', e);
+  }
+}
+
+// Browser fallback
+const synth = window.speechSynthesis;
+function speakNativeFallback(text) {
+  synth.cancel();
+  const clean = text.replace(/\*\*/g,'').replace(/\*/g,'').replace(/_/g,'').replace(/\n/g,'. ');
+  const u = new SpeechSynthesisUtterance(clean);
+  const voices = synth.getVoices();
+  const esVoice = voices.find(v => v.lang === 'es-MX' && /jorge|carlos|male|hombre/i.test(v.name)) ||
+                  voices.find(v => v.lang === 'es-MX') ||
+                  voices.find(v => v.lang.startsWith('es'));
+  if (esVoice) u.voice = esVoice;
+  u.lang = 'es-MX';
+  u.pitch = 0.85;
+  u.rate = 0.88;
+  u.onstart = () => setBarsSpeaking(true);
+  u.onend = () => setBarsSpeaking(false);
+  synth.speak(u);
+}
+
+function speakNativeOrNeural(text, audioUrl = null) {
+  if (audioUrl) {
+    playAudioUrl(audioUrl);
+  } else {
+    fetch('/tts', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ text })
+    })
+    .then(r => r.json())
+    .then(d => {
+      if (d.audio_url) playAudioUrl(d.audio_url);
+      else speakNativeFallback(text);
+    })
+    .catch(() => speakNativeFallback(text));
+  }
+}
+
+// ==========================================
+// STARK AMBIENT AUDIO SYSTEM (NATIVE STREAM)
+// ==========================================
+const ambientPlayer = document.getElementById('ambientMusicPlayer');
+const ambientDock = document.getElementById('ambientDock');
+const ambientTitle = document.getElementById('ambientSongTitle');
+const ambientIcon = document.getElementById('ambientIcon');
+const ambientLink = document.getElementById('ambientExternalLink');
+
+function playAmbientSong(title, streamUrl, watchUrl) {
+  if (!streamUrl) {
+    if (watchUrl) window.open(watchUrl, '_blank');
+    return;
+  }
+  ambientTitle.textContent = title || 'Pista de Audio';
+  ambientLink.href = watchUrl || '#';
+  ambientPlayer.src = streamUrl;
+  ambientPlayer.volume = 0.85;
+
+  ambientPlayer.play().then(() => {
+    ambientDock.classList.remove('hidden');
+    ambientDock.classList.add('flex');
+    ambientIcon.textContent = 'pause';
+    setBarsSpeaking(true);
+
+    // Register Background MediaSession for Android lockscreen and persistent background playback
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: title || 'Música Stark Ambient',
+        artist: 'J.A.R.V.I.S. Audio Stream',
+        album: 'Industrias Stark',
+        artwork: [
+          { src: '/static/jarvis_core.png', sizes: '192x192', type: 'image/png' },
+          { src: '/static/jarvis_core.png', sizes: '512x512', type: 'image/png' }
+        ]
+      });
+      navigator.mediaSession.setActionHandler('play', () => toggleAmbientMusic());
+      navigator.mediaSession.setActionHandler('pause', () => toggleAmbientMusic());
+      navigator.mediaSession.setActionHandler('stop', () => stopAmbientMusic());
+    }
+  }).catch(err => {
+    console.warn('Autoplay prevented, opening watch link:', err);
+    if (watchUrl) window.open(watchUrl, '_blank');
+  });
+
+  ambientPlayer.onended = () => {
+    ambientDock.classList.add('hidden');
+    ambientDock.classList.remove('flex');
+    setBarsSpeaking(false);
+  };
+}
+
+function toggleAmbientMusic() {
+  if (ambientPlayer.paused) {
+    ambientPlayer.play();
+    ambientIcon.textContent = 'pause';
+    setBarsSpeaking(true);
+  } else {
+    ambientPlayer.pause();
+    ambientIcon.textContent = 'play_arrow';
+    setBarsSpeaking(false);
+  }
+}
+
+function stopAmbientMusic() {
+  ambientPlayer.pause();
+  ambientPlayer.currentTime = 0;
+  ambientDock.classList.add('hidden');
+  ambientDock.classList.remove('flex');
+  setBarsSpeaking(false);
+}
+
+// ==========================================
+// 4. STREAMING TYPEWRITER CHAT
+// ==========================================
+async function sendStream() {
+  const input = document.getElementById('userInput');
+  const box = document.getElementById('chatBox');
+  const typing = document.getElementById('typing');
+  const text = input.value.trim();
+  if (!text) return;
+
+  // Add user bubble
+  box.innerHTML += `<div class="msg msg-user">${formatMarkdown(text)}</div>`;
+  input.value = '';
+  box.scrollTop = box.scrollHeight;
+  typing.classList.remove('hidden');
+
+  // Create bot bubble with typing cursor
+  const botMsgId = 'bot-msg-' + Date.now();
+  const botBubble = document.createElement('div');
+  botBubble.className = 'msg msg-bot';
+  botBubble.id = botMsgId;
+  botBubble.innerHTML = `<span class="content"></span><span class="typing-cursor"></span>`;
+  box.appendChild(botBubble);
+  box.scrollTop = box.scrollHeight;
+
+  const contentSpan = botBubble.querySelector('.content');
+  let accumulatedText = '';
+  let finalAudioUrl = null;
+  let finalAction = null;
+
+  try {
+    const response = await fetch('/chat-stream', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ message: text })
+    });
+
+    typing.classList.add('hidden');
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunkStr = decoder.decode(value, { stream: true });
+      const lines = chunkStr.split('\n');
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.chunk) {
+              accumulatedText += data.chunk;
+              contentSpan.innerHTML = formatMarkdown(accumulatedText);
+              box.scrollTop = box.scrollHeight;
+            }
+            if (data.audio_url) {
+              finalAudioUrl = data.audio_url;
+            }
+            if (data.action) {
+              finalAction = data.action;
+            }
+          } catch (e) {}
+        }
+      }
+    }
+
+    // Remove cursor
+    const cursor = botBubble.querySelector('.typing-cursor');
+    if (cursor) cursor.remove();
+
+    // Execute actions (music, call, tasks)
+    if (finalAction) {
+      if (finalAction.action === 'play_music') {
+        const songTitle = finalAction.title || finalAction.query || 'Pista de Audio';
+        const streamUrl = finalAction.audio_stream_url;
+        const watchUrl = finalAction.watch_url;
+
+        const mediaCard = document.createElement('div');
+        mediaCard.className = 'mt-3 p-3 border border-[var(--primary)] bg-black/90 rounded flex items-center justify-between gap-3 text-xs shadow-[0_0_15px_var(--primary-glow)] hud-bracket';
+        mediaCard.innerHTML = `
+          <div class="flex items-center gap-2.5 truncate">
+            <span class="material-symbols-outlined text-sm text-[var(--primary)] animate-pulse">graphic_eq</span>
+            <div class="flex flex-col truncate">
+              <span class="text-[9px] text-[var(--primary)]/70 tracking-widest font-bold">CANAL DE AUDIO AMBIENTAL</span>
+              <span class="text-xs text-[var(--primary)] font-bold truncate">${songTitle}</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 flex-shrink-0">
+            <button onclick="toggleAmbientMusic()" class="px-2 py-1 bg-[var(--primary-dim)] border border-[var(--primary)] text-[var(--primary)] text-[10px] font-bold hover:bg-[var(--primary)] hover:text-black transition-all">
+              PAUSAR/PLAY
+            </button>
+            <a href="${watchUrl}" target="_blank" class="px-2 py-1 bg-[var(--primary-dim)] border border-[var(--border-color)] text-[var(--primary)] text-[10px] font-bold hover:bg-[var(--primary)] hover:text-black transition-all" title="Abrir video en YouTube">
+              YOUTUBE ↗
+            </a>
+          </div>
+        `;
+        botBubble.appendChild(mediaCard);
+        box.scrollTop = box.scrollHeight;
+
+        // Start subtle ambient playback
+        playAmbientSong(songTitle, streamUrl, watchUrl);
+      } else if (finalAction.action === 'call') {
+        const target = finalAction.target;
+        const callCard = document.createElement('div');
+        callCard.className = 'mt-3 p-3 border border-[var(--primary)] bg-black/90 rounded flex items-center justify-between gap-3 text-xs shadow-[0_0_15px_var(--primary-glow)] hud-bracket';
+        callCard.innerHTML = `
+          <div class="flex items-center gap-2.5">
+            <span class="material-symbols-outlined text-base text-[var(--primary)] animate-pulse">phone_in_talk</span>
+            <div>
+              <div class="text-[9px] text-[var(--primary)]/70 tracking-widest font-bold">ENLACE TELEFÓNICO NATIVO</div>
+              <div class="text-xs text-[var(--primary)] font-bold">Marcando a: ${target}</div>
+            </div>
+          </div>
+          <button onclick="executePhoneCall('${target.replace(/'/g, "\\'")}')" class="px-3 py-1 bg-[var(--primary-dim)] border border-[var(--primary)] text-[var(--primary)] text-[10px] font-bold hover:bg-[var(--primary)] hover:text-black transition-all">
+            MARCAR AHORA
+          </button>
+        `;
+        botBubble.appendChild(callCard);
+        box.scrollTop = box.scrollHeight;
+        executePhoneCall(target);
+      } else if (finalAction.action === 'create_task' || finalAction.action === 'complete_task') {
+        loadTasks();
+      }
+    }
+
+    // Play speech audio
+    if (finalAudioUrl) {
+      playAudioUrl(finalAudioUrl);
+    } else if (accumulatedText) {
+      speakNativeOrNeural(accumulatedText);
+    }
+
+  } catch (err) {
+    typing.classList.add('hidden');
+    contentSpan.innerHTML = `Interferencia en la transmisión, Señor: ${err.message}`;
+    const cursor = botBubble.querySelector('.typing-cursor');
+    if (cursor) cursor.remove();
+  }
+}
+
+// ==========================================
+// 5. HANDS-FREE ("HEY JARVIS") & VOICE INPUT
+// ==========================================
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = SR ? new SR() : null;
+let handsFreeRecognition = null;
+let isHandsFreeActive = false;
+
+if (recognition) {
+  recognition.lang = 'es-MX';
+  recognition.onresult = e => {
+    document.getElementById('userInput').value = e.results[0][0].transcript;
+    sendStream();
+  };
+}
+
+function startListening() {
+  if (!recognition) return alert('Reconocimiento de voz no soportado en este navegador.');
+  try {
+    recognition.start();
+    document.getElementById('jarvisBtn')?.classList.add('listening');
+    document.getElementById('micBtn').style.color = '#ff2a44';
+  } catch (e) {}
+
+  recognition.onend = () => {
+    document.getElementById('jarvisBtn')?.classList.remove('listening');
+    document.getElementById('micBtn').style.color = 'var(--primary)';
+  };
+}
+
+function toggleHandsFree() {
+  if (!SR) return alert('Reconocimiento continuo no disponible en este navegador.');
+  isHandsFreeActive = !isHandsFreeActive;
+  const btnText = document.getElementById('handsFreeText');
+
+  if (isHandsFreeActive) {
+    btnText.textContent = 'AUTO-ESCUCHA: ON';
+    btnText.parentElement.classList.add('bg-[var(--primary-dim)]');
+    startHandsFreeLoop();
+    speakNativeOrNeural('Modo de escucha continua activado, Señor.');
+  } else {
+    btnText.textContent = 'AUTO-ESCUCHA: OFF';
+    btnText.parentElement.classList.remove('bg-[var(--primary-dim)]');
+    if (handsFreeRecognition) handsFreeRecognition.stop();
+  }
+}
+
+function startHandsFreeLoop() {
+  if (!isHandsFreeActive) return;
+  handsFreeRecognition = new SR();
+  handsFreeRecognition.lang = 'es-MX';
+  handsFreeRecognition.continuous = true;
+  handsFreeRecognition.interimResults = false;
+
+  handsFreeRecognition.onresult = e => {
+    const lastResult = e.results[e.results.length - 1][0].transcript.toLowerCase().trim();
+    console.log('[Hands-Free Detected]:', lastResult);
+
+    if (lastResult.includes('jarvis') || lastResult.includes('oye jarvis') || lastResult.includes('hey jarvis')) {
+      // Extract command after wake word
+      let cmd = lastResult.replace(/.*?(hey jarvis|oye jarvis|jarvis)/i, '').trim();
+      openChat();
+
+      if (cmd.length > 2) {
+        document.getElementById('userInput').value = cmd;
+        sendStream();
+      } else {
+        // Just called his name
+        speakNativeOrNeural('A su servicio, Señor.');
+        startListening();
+      }
+    }
+  };
+
+  handsFreeRecognition.onend = () => {
+    if (isHandsFreeActive) {
+      setTimeout(startHandsFreeLoop, 300);
+    }
+  };
+
+  try {
+    handsFreeRecognition.start();
+  } catch (e) {}
+}
+
+// ==========================================
+// 6. COMBAT MODE TOGGLE
+// ==========================================
+let isCombatMode = false;
+async function toggleCombatMode() {
+  isCombatMode = !isCombatMode;
+  const body = document.body;
+  const combatBtn = document.getElementById('combatBtn');
+  const statusBadge = document.getElementById('statusBadge');
+  const coreBadge = document.getElementById('coreBadge');
+
+  if (isCombatMode) {
+    body.classList.add('combat-mode');
+    combatBtn.textContent = 'DESACTIVAR MODO COMBATE';
+    combatBtn.classList.add('!bg-[#ff2a44]', '!text-black', '!border-[#ff2a44]');
+    statusBadge.textContent = 'DEFCON 1: COMBAT ENGAGED';
+    statusBadge.classList.add('text-[#ff2a44]');
+    coreBadge.textContent = 'SISTEMA DE COMBATE ACTIVO';
+    speakNativeOrNeural('Protocolos de combate activados, Señor. Todos los sistemas defensivos al cien por ciento.');
+  } else {
+    body.classList.remove('combat-mode');
+    combatBtn.textContent = 'ACTIVAR MODO COMBATE';
+    combatBtn.classList.remove('!bg-[#ff2a44]', '!text-black', '!border-[#ff2a44]');
+    statusBadge.textContent = 'MARK LXXXV: ONLINE';
+    statusBadge.classList.remove('text-[#ff2a44]');
+    coreBadge.textContent = 'NÚCLEO NEURONAL ACTIVO';
+    speakNativeOrNeural('Sistemas reconfigurados a modo estándar, Señor.');
+  }
+
+  // Save preference
+  fetch('/preferences', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ combat_mode: isCombatMode ? 'true' : 'false' })
+  }).catch(() => {});
+}
+
+// Quick action trigger from sidebar
+function triggerQuickAction(type) {
+  openChat();
+  if (type === 'captura') {
+    document.getElementById('userInput').value = 'toma una captura de pantalla';
+  } else if (type === 'calculadora') {
+    document.getElementById('userInput').value = 'abre la calculadora';
+  } else if (type === 'explorador') {
+    document.getElementById('userInput').value = 'abre los archivos';
+  }
+  sendStream();
+}
+
+// ==========================================
+// 7. STARK TASKS & PROTOCOLS MATRIX
+// ==========================================
+function openTasksModal() {
+  const modal = document.getElementById('tasksOverlay');
+  modal.classList.add('active');
+  loadTasks();
+}
+
+function closeTasksModal() {
+  const modal = document.getElementById('tasksOverlay');
+  modal.classList.remove('active');
+}
+
+async function loadTasks() {
+  const container = document.getElementById('tasksContainer');
+  try {
+    const res = await fetch('/tasks');
+    const data = await res.json();
+    renderTasks(data.tasks || []);
+  } catch (err) {
+    if (container) {
+      container.innerHTML = `<div class="text-xs text-red-400 py-4 text-center">Fallo al enlazar con la base de datos de tareas: ${err.message}</div>`;
+    }
+  }
+}
+
+function renderTasks(tasks) {
+  const container = document.getElementById('tasksContainer');
+  if (!container) return;
+  if (!tasks || tasks.length === 0) {
+    container.innerHTML = `
+      <div class="text-center py-8 text-neutral-500 text-xs font-mono">
+        <span class="material-symbols-outlined text-3xl mb-1 text-[var(--primary)]/40">task_alt</span>
+        <div>No hay protocolos pendientes en la matriz, Señor.</div>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = tasks.map(t => {
+    const isDone = t.status === 'completed';
+    return `
+      <div class="flex items-center justify-between p-3 border border-[var(--border-color)] bg-black/60 rounded hud-bracket transition-all hover:border-[var(--primary)] group">
+        <div class="flex items-center gap-3 flex-1 min-w-0">
+          <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleTask(${t.id})" class="accent-[var(--primary)] w-4 h-4 cursor-pointer">
+          <span class="text-xs font-mono truncate ${isDone ? 'line-through text-neutral-500' : 'text-neutral-200 font-bold'}">
+            ${escapeHtml(t.title)}
+          </span>
+        </div>
+        <div class="flex items-center gap-2 ml-2">
+          <span class="text-[9px] font-mono px-2 py-0.5 border ${isDone ? 'border-green-500/50 text-green-400 bg-green-500/10' : 'border-[var(--primary)]/50 text-[var(--primary)] bg-[var(--primary-dim)]'}">
+            ${isDone ? 'COMPLETADO' : 'PENDIENTE'}
+          </span>
+          <button onclick="removeTask(${t.id})" class="text-neutral-500 hover:text-red-400 p-1 text-xs" title="Eliminar protocolo">
+            <span class="material-symbols-outlined text-sm">delete</span>
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+async function submitNewTask() {
+  const input = document.getElementById('newTaskInput');
+  const title = input.value.trim();
+  if (!title) return;
+
+  try {
+    const res = await fetch('/tasks', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ title })
+    });
+    const data = await res.json();
+    input.value = '';
+    renderTasks(data.tasks || []);
+  } catch (err) {
+    alert('Error al registrar protocolo: ' + err.message);
+  }
+}
+
+async function toggleTask(id) {
+  try {
+    const res = await fetch('/tasks/complete', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ id })
+    });
+    const data = await res.json();
+    renderTasks(data.tasks || []);
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+async function removeTask(id) {
+  try {
+    const res = await fetch(`/tasks/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    renderTasks(data.tasks || []);
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+// ==========================================
+// 8. MOBILE FLOATING ACTION & PHONE CALL BRIDGE
+// ==========================================
+function quickVoiceTrigger() {
+  const chat = document.getElementById('chatOverlay');
+  if (!chat.classList.contains('active')) {
+    openChat();
+  }
+  startListening();
+}
+
+function executePhoneCall(target) {
+  if (window.AndroidBridge && window.AndroidBridge.makePhoneCall) {
+    window.AndroidBridge.makePhoneCall(target);
+  } else {
+    window.location.href = 'tel:' + encodeURIComponent(target);
+  }
+}
+
+// Global ESC handler to close modals
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    closeChat();
+    closeTasksModal();
+  }
+});
+</script>
+</body>
+</html>
