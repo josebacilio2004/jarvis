@@ -660,6 +660,10 @@ function playAmbientSong(title, streamUrl, watchUrl) {
       navigator.mediaSession.setActionHandler('pause', () => toggleAmbientMusic());
       navigator.mediaSession.setActionHandler('stop', () => stopAmbientMusic());
     }
+    // Call Android native bridge to show persistent system notification
+    if (window.AndroidBridge && window.AndroidBridge.showMediaNotification) {
+      window.AndroidBridge.showMediaNotification(title || 'Música Stark', 'Sintonizando en segundo plano');
+    }
   }).catch(err => {
     console.warn('Autoplay prevented, opening watch link:', err);
     if (watchUrl) window.open(watchUrl, '_blank');
@@ -669,6 +673,9 @@ function playAmbientSong(title, streamUrl, watchUrl) {
     ambientDock.classList.add('hidden');
     ambientDock.classList.remove('flex');
     setBarsSpeaking(false);
+    if (window.AndroidBridge && window.AndroidBridge.cancelMediaNotification) {
+      window.AndroidBridge.cancelMediaNotification();
+    }
   };
 }
 
@@ -677,10 +684,16 @@ function toggleAmbientMusic() {
     ambientPlayer.play();
     ambientIcon.textContent = 'pause';
     setBarsSpeaking(true);
+    if (window.AndroidBridge && window.AndroidBridge.showMediaNotification) {
+      window.AndroidBridge.showMediaNotification(ambientTitle.textContent, 'Reproducción activa');
+    }
   } else {
     ambientPlayer.pause();
     ambientIcon.textContent = 'play_arrow';
     setBarsSpeaking(false);
+    if (window.AndroidBridge && window.AndroidBridge.showMediaNotification) {
+      window.AndroidBridge.showMediaNotification(ambientTitle.textContent, 'En pausa');
+    }
   }
 }
 
@@ -690,6 +703,9 @@ function stopAmbientMusic() {
   ambientDock.classList.add('hidden');
   ambientDock.classList.remove('flex');
   setBarsSpeaking(false);
+  if (window.AndroidBridge && window.AndroidBridge.cancelMediaNotification) {
+    window.AndroidBridge.cancelMediaNotification();
+  }
 }
 
 // ==========================================
@@ -746,8 +762,12 @@ async function sendStream() {
             const data = JSON.parse(line.slice(6));
             if (data.chunk) {
               accumulatedText += data.chunk;
-              contentSpan.innerHTML = formatMarkdown(accumulatedText);
+              const cleanStreamingText = accumulatedText.replace(/\[?(?:ACCION:)?(?:REPRODUCIR|CREAR_TAREA|COMPLETAR_TAREA|LLAMAR|ABRIR|BUSCAR|CAPTURA):?[^\]]*\]?/gi, '').trim();
+              contentSpan.innerHTML = formatMarkdown(cleanStreamingText);
               box.scrollTop = box.scrollHeight;
+            }
+            if (data.clean_text) {
+              contentSpan.innerHTML = formatMarkdown(data.clean_text);
             }
             if (data.audio_url) {
               finalAudioUrl = data.audio_url;

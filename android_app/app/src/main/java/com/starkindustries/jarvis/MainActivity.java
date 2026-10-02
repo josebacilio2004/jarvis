@@ -2,16 +2,20 @@ package com.starkindustries.jarvis;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.Context;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.PowerManager;
+import android.provider.ContactsContract;
 import android.view.View;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
@@ -28,14 +32,22 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.ContextCompat;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
+
+import java.text.Normalizer;
+import java.util.ArrayList;
+import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
     private static final String PREFS_NAME = "JarvisPrefs";
     private static final String KEY_SERVER_URL = "server_url";
     private static final int PERMISSION_REQUEST_CODE = 101;
+    private static final String CHANNEL_ID = "jarvis_media_channel";
+    private static final int NOTIFICATION_ID = 1001;
 
     private BackgroundAudioWebView webView;
     private SwipeRefreshLayout swipeRefresh;
@@ -54,17 +66,52 @@ public class MainActivity extends AppCompatActivity {
             runOnUiThread(() -> {
                 try {
                     String cleanTarget = (target == null) ? "" : target.trim();
-                    Intent dialIntent = new Intent(Intent.ACTION_DIAL);
-                    if (!cleanTarget.isEmpty()) {
-                        dialIntent.setData(Uri.parse("tel:" + Uri.encode(cleanTarget)));
+                    if (cleanTarget.isEmpty()) {
+                        Toast.makeText(mContext, "Destinatario no especificado", Toast.LENGTH_SHORT).show();
+                        return;
                     }
-                    dialIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                    mContext.startActivity(dialIntent);
-                    Toast.makeText(mContext, "Iniciando enlace telefónico: " + cleanTarget, Toast.LENGTH_SHORT).show();
+
+                    // 1. Resolve Contact Name to actual Phone Number
+                    String resolvedNumber = resolvePhoneNumber(cleanTarget);
+                    String numberToCall = (resolvedNumber != null && !resolvedNumber.isEmpty()) ? resolvedNumber : cleanTarget;
+
+                    // Clean string to phone digits and plus symbol
+                    String dialString = numberToCall.replaceAll("[^0-9+]", "");
+                    if (dialString.isEmpty()) {
+                        dialString = numberToCall;
+                    }
+
+                    // 2. Perform direct phone call if permitted, else dialer
+                    Intent callIntent;
+                    if (ContextCompat.checkSelfPermission(mContext, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
+                        callIntent = new Intent(Intent.ACTION_CALL);
+                    } else {
+                        callIntent = new Intent(Intent.ACTION_DIAL);
+                    }
+
+                    callIntent.setData(Uri.parse("tel:" + Uri.encode(dialString)));
+                    callIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    mContext.startActivity(callIntent);
+
+                    String msg = (resolvedNumber != null) 
+                            ? "Marcando a " + cleanTarget + " (" + resolvedNumber + ")" 
+                            : "Marcando a " + cleanTarget;
+                    Toast.makeText(mContext, msg, Toast.LENGTH_SHORT).show();
+
                 } catch (Exception e) {
-                    Toast.makeText(mContext, "Error al marcar: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    Toast.makeText(mContext, "Error al enlazar llamada: " + e.getMessage(), Toast.LENGTH_LONG).show();
                 }
             });
+        }
+
+        @JavascriptInterface
+        public void showMediaNotification(String title, String subtitle) {
+            MainActivity.this.showMediaNotification(title, subtitle);
+        }
+
+        @JavascriptInterface
+        public void cancelMediaNotification() {
+            MainActivity.this.cancelMediaNotification();
         }
 
         @JavascriptInterface
@@ -76,6 +123,128 @@ public class MainActivity extends AppCompatActivity {
         public boolean isNativeApp() {
             return true;
         }
+    }
+
+    private String normalizeString(String input) {
+        if (input == null) return "";
+        return Normalizer.normalize(input, Normalizer.Form.NFD)
+                .replaceAll("\\p{InCombiningDiacriticalMarks}+", "")
+                .toLowerCase()
+                .trim();
+    }
+
+    private String resolvePhoneNumber(String target) {
+        if (target == null || target.trim().isEmpty()) return null;
+        String cleanTarget = target.trim();
+
+        // If it's already digits, return as-is
+        if (cleanTarget.matches("^[+]?[0-9\\s-]{6,}$")) {
+            return cleanTarget;
+        }
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
+            return null;
+        }
+
+        String searchNormalized = normalizeString(cleanTarget);
+        Uri uri = ContactsContract.CommonDataKinds.Phone.CONTENT_URI;
+        String[] projection = new String[]{
+                ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                ContactsContract.CommonDataKinds.Phone.NUMBER
+        };
+
+        Cursor cursor = null;
+        try {
+            cursor = getContentResolver().query(uri, projection, null, null, null);
+            if (cursor != null) {
+                String partialMatchNumber = null;
+                while (cursor.moveToNext()) {
+                    int nameIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME);
+                    int numIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER);
+                    if (nameIdx >= 0 && numIdx >= 0) {
+                        String name = cursor.getString(nameIdx);
+                        String number = cursor.getString(numIdx);
+                        if (name != null && number != null) {
+                            String normName = normalizeString(name);
+                            // Exact match (e.g. "mama" == "mama")
+                            if (normName.equals(searchNormalized)) {
+                                return number;
+                            }
+                            // Starts with or contains match fallback
+                            if (normName.contains(searchNormalized) && partialMatchNumber == null) {
+                                partialMatchNumber = number;
+                            }
+                        }
+                    }
+                }
+                if (partialMatchNumber != null) {
+                    return partialMatchNumber;
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            if (cursor != null) cursor.close();
+        }
+        return null;
+    }
+
+    private void createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            CharSequence name = "J.A.R.V.I.S. Audio & Tareas";
+            String description = "Notificaciones de reproducción y operaciones de Stark Industries";
+            int importance = NotificationManager.IMPORTANCE_LOW;
+            NotificationChannel channel = new NotificationChannel(CHANNEL_ID, name, importance);
+            channel.setDescription(description);
+            NotificationManager nm = getSystemService(NotificationManager.class);
+            if (nm != null) {
+                nm.createNotificationChannel(channel);
+            }
+        }
+    }
+
+    public void showMediaNotification(String title, String subtitle) {
+        runOnUiThread(() -> {
+            try {
+                createNotificationChannel();
+                Intent intent = new Intent(this, MainActivity.class);
+                intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent,
+                        PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+                String mainTitle = (title != null && !title.isEmpty()) ? title : "J.A.R.V.I.S. OS";
+                String mainSub = (subtitle != null && !subtitle.isEmpty()) ? subtitle : "Transmisión Stark Activa";
+
+                NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
+                        .setSmallIcon(R.mipmap.ic_launcher)
+                        .setContentTitle(mainTitle)
+                        .setContentText(mainSub)
+                        .setSubText("J.A.R.V.I.S. AUDIO")
+                        .setPriority(NotificationCompat.PRIORITY_LOW)
+                        .setContentIntent(pendingIntent)
+                        .setOngoing(true)
+                        .setAutoCancel(false);
+
+                NotificationManagerCompat manager = NotificationManagerCompat.from(this);
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                        ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+                    manager.notify(NOTIFICATION_ID, builder.build());
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    public void cancelMediaNotification() {
+        runOnUiThread(() -> {
+            try {
+                NotificationManagerCompat manager = NotificationManagerCompat.from(this);
+                manager.cancel(NOTIFICATION_ID);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        });
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -117,7 +286,7 @@ public class MainActivity extends AppCompatActivity {
         ws.setSupportZoom(false);
         ws.setBuiltInZoomControls(false);
 
-        // Register Native JavaScript Bridge for Phone Calling & Native Actions
+        // Register Native JavaScript Bridge for Phone Calling & Media Notifications
         webView.addJavascriptInterface(new StarkAndroidBridge(this), "AndroidBridge");
 
         // Enable Mixed Content for local/remote hybrid connections
@@ -179,7 +348,7 @@ public class MainActivity extends AppCompatActivity {
             return true;
         });
 
-        // Request runtime permissions (Microphone & Call Phone)
+        // Request runtime permissions (Microphone, Phone, Contacts, Notifications)
         checkAndRequestPermissions();
 
         // Load the JARVIS server URL
@@ -187,11 +356,23 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void checkAndRequestPermissions() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
-                != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this,
-                    new String[]{Manifest.permission.RECORD_AUDIO, Manifest.permission.CALL_PHONE},
-                    PERMISSION_REQUEST_CODE);
+        List<String> permissions = new ArrayList<>();
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            permissions.add(Manifest.permission.RECORD_AUDIO);
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
+            permissions.add(Manifest.permission.CALL_PHONE);
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
+            permissions.add(Manifest.permission.READ_CONTACTS);
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                permissions.add(Manifest.permission.POST_NOTIFICATIONS);
+            }
+        }
+        if (!permissions.isEmpty()) {
+            ActivityCompat.requestPermissions(this, permissions.toArray(new String[0]), PERMISSION_REQUEST_CODE);
         }
     }
 
@@ -241,12 +422,12 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onPause() {
         super.onPause();
-        // Crucial: We intentionally do NOT call webView.onPause() or webView.pauseTimers()
-        // so that background audio (yt-dlp stream / TTS voice) keeps streaming when minimized!
+        // Crucial: Do not suspend webView or pause timers so audio and network remain alive
     }
 
     @Override
     protected void onDestroy() {
+        cancelMediaNotification();
         if (wakeLock != null && wakeLock.isHeld()) {
             wakeLock.release();
         }

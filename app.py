@@ -57,23 +57,23 @@ CAPACIDADES MULTIMEDIA Y PROTOCOLOS DE ACCIÓN:
 - NUNCA rompas el personaje. NUNCA menciones que eres de Google ni que eres un LLM."""
 
 def execute_embedded_actions(text: str):
-    """Detect and execute [ACCION:TIPO:OBJETO] tags embedded in Gemini response."""
-    action_match = re.search(r'\[ACCION:(\w+)(?::([^\]]+))?\]', text)
-    clean_text = re.sub(r'\[ACCION:.*?\]', '', text).strip()
+    """Detect and execute [ACCION:TIPO:OBJETO] or [TIPO:OBJETO] tags embedded in Gemini response."""
+    action_match = re.search(r'\[(?:ACCION:)?(\w+)(?::([^\]]+))?\]', text)
+    clean_text = re.sub(r'\[?(?:ACCION:)?(?:REPRODUCIR|CREAR_TAREA|COMPLETAR_TAREA|LLAMAR|ABRIR|BUSCAR|CAPTURA):?[^\]]*\]?', '', text).strip()
     action_result = None
     if action_match:
         act_type = action_match.group(1).upper()
         act_target = (action_match.group(2) or "").strip()
         print(f"[JARVIS Protocol] Acción detectada: {act_type} -> '{act_target}'")
-        if act_type == "REPRODUCIR":
+        if act_type in ["REPRODUCIR", "PLAY"]:
             action_result = os_control.play_music(act_target)
-        elif act_type == "CREAR_TAREA":
+        elif act_type in ["CREAR_TAREA", "TAREA"]:
             task_id = db.add_task(act_target)
             action_result = {"action": "create_task", "id": task_id, "title": act_target, "tasks": db.get_tasks()}
-        elif act_type == "COMPLETAR_TAREA":
+        elif act_type in ["COMPLETAR_TAREA", "TERMINAR_TAREA"]:
             success = db.complete_task(act_target)
             action_result = {"action": "complete_task", "success": success, "target": act_target, "tasks": db.get_tasks()}
-        elif act_type == "LLAMAR":
+        elif act_type in ["LLAMAR", "CALL"]:
             action_result = {"action": "call", "target": act_target, "message": f"Iniciando enlace telefónico con {act_target}, Señor."}
         elif act_type == "ABRIR":
             action_result = os_control.open_application(act_target)
@@ -239,7 +239,7 @@ def chat_stream():
                 if chunk.text:
                     full_text += chunk.text
                     # Strip action tags from display stream
-                    display_chunk = re.sub(r'\[ACCION:.*?\]?', '', chunk.text)
+                    display_chunk = re.sub(r'\[?(?:ACCION:)?(?:REPRODUCIR|CREAR_TAREA|COMPLETAR_TAREA|LLAMAR|ABRIR|BUSCAR|CAPTURA):?[^\]]*\]?', '', chunk.text)
                     if display_chunk:
                         yield f"data: {json.dumps({'chunk': display_chunk})}\n\n"
 
@@ -249,7 +249,7 @@ def chat_stream():
             
             # Generate TTS audio for clean speech
             audio_url = tts_engine.generate_tts_audio(clean_reply)
-            yield f"data: {json.dumps({'done': True, 'audio_url': audio_url, 'action': action_result})}\n\n"
+            yield f"data: {json.dumps({'done': True, 'audio_url': audio_url, 'action': action_result, 'clean_text': clean_reply})}\n\n"
 
         except Exception as e:
             print(f"Error in stream: {e}")
@@ -259,13 +259,13 @@ def chat_stream():
                 for chunk in stream:
                     if chunk.text:
                         full_text += chunk.text
-                        display_chunk = re.sub(r'\[ACCION:.*?\]?', '', chunk.text)
+                        display_chunk = re.sub(r'\[?(?:ACCION:)?(?:REPRODUCIR|CREAR_TAREA|COMPLETAR_TAREA|LLAMAR|ABRIR|BUSCAR|CAPTURA):?[^\]]*\]?', '', chunk.text)
                         if display_chunk:
                             yield f"data: {json.dumps({'chunk': display_chunk})}\n\n"
                 clean_reply, action_result = execute_embedded_actions(full_text)
                 db.add_message("jarvis", clean_reply)
                 audio_url = tts_engine.generate_tts_audio(clean_reply)
-                yield f"data: {json.dumps({'done': True, 'audio_url': audio_url, 'action': action_result})}\n\n"
+                yield f"data: {json.dumps({'done': True, 'audio_url': audio_url, 'action': action_result, 'clean_text': clean_reply})}\n\n"
             except Exception as e2:
                 err_text = f"Interferencia detectada en el flujo neuronal: {str(e2)[:60]}"
                 yield f"data: {json.dumps({'chunk': err_text, 'done': True})}\n\n"

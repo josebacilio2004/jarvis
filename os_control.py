@@ -79,20 +79,27 @@ def open_application(app_name: str) -> dict:
 def take_screenshot() -> dict:
     """Capture screen and return public static path."""
     if pyautogui is None:
-        return {"success": False, "message": "Captura de pantalla no disponible en servidor en la nube sin entorno gráfico."}
+        return {
+            "success": False, 
+            "message": "Señor, la captura del ordenador central no está disponible en servidor cloud. Si está desde su teléfono móvil, puede capturar la pantalla presionando simultáneamente Encendido + Bajar Volumen."
+        }
     try:
+        from PIL import ImageGrab
         filename = f"screenshot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
         filepath = os.path.join(SCREENSHOTS_DIR, filename)
-        screenshot = pyautogui.screenshot()
+        screenshot = ImageGrab.grab(all_screens=True)
         screenshot.save(filepath)
         return {
             "success": True,
             "filename": filename,
             "url": f"/static/screenshots/{filename}",
-            "message": "Captura de pantalla realizada y almacenada en los registros, Señor."
+            "message": "Captura de pantalla del sistema central completada y archivada, Señor."
         }
     except Exception as e:
-        return {"success": False, "message": f"Fallo al capturar pantalla: {str(e)}"}
+        return {
+            "success": False, 
+            "message": "Señor, no fue posible capturar la pantalla de la PC (el monitor o sesión gráfica puede estar suspendido). Para capturar la pantalla de su dispositivo móvil, presione los botones físicos de Encendido + Bajar Volumen."
+        }
 
 def resolve_song_audio_stream(query: str) -> dict:
     """Extract direct audio stream URL with yt-dlp for seamless native playback."""
