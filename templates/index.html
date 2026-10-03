@@ -23,13 +23,40 @@
     --grid-color: rgba(0, 218, 243, 0.08);
   }
 
-  body.combat-mode {
+  body.theme-lxxxv {
+    --primary: #00daf3;
+    --primary-glow: rgba(0, 218, 243, 0.4);
+    --primary-dim: rgba(0, 218, 243, 0.15);
+    --primary-bright: #c3f5ff;
+    --border-color: rgba(0, 218, 243, 0.3);
+    --grid-color: rgba(0, 218, 243, 0.08);
+  }
+
+  body.theme-vii, body.combat-mode {
     --primary: #ff2a44;
     --primary-glow: rgba(255, 42, 68, 0.5);
     --primary-dim: rgba(255, 42, 68, 0.2);
     --primary-bright: #ffd2d7;
     --border-color: rgba(255, 42, 68, 0.4);
     --grid-color: rgba(255, 42, 68, 0.12);
+  }
+
+  body.theme-stealth {
+    --primary: #818cf8;
+    --primary-glow: rgba(129, 140, 248, 0.5);
+    --primary-dim: rgba(129, 140, 248, 0.2);
+    --primary-bright: #e0e7ff;
+    --border-color: rgba(129, 140, 248, 0.4);
+    --grid-color: rgba(129, 140, 248, 0.12);
+  }
+
+  body.theme-emerald {
+    --primary: #10b981;
+    --primary-glow: rgba(16, 185, 129, 0.5);
+    --primary-dim: rgba(16, 185, 129, 0.2);
+    --primary-bright: #d1fae5;
+    --border-color: rgba(16, 185, 129, 0.4);
+    --grid-color: rgba(16, 185, 129, 0.12);
   }
 
   @keyframes rotate-cw { from{transform:rotate(0)} to{transform:rotate(360deg)} }
@@ -146,6 +173,10 @@
         <span class="material-symbols-outlined text-xs">checklist</span>
         <span>TAREAS</span>
       </button>
+      <button onclick="openSettingsModal()" class="text-[10px] px-2.5 py-1 border border-[var(--border-color)] text-[var(--primary)] hover:bg-[var(--primary-dim)] transition-all flex items-center gap-1 font-bold" title="Ajustes de Perfil y Voz">
+        <span class="material-symbols-outlined text-xs">tune</span>
+        <span>AJUSTES</span>
+      </button>
       <span class="text-xs text-neutral-400 hover:text-[var(--primary)] transition-all cursor-pointer" onclick="openChat()">COMUNICACIÓN</span>
     </div>
   </div>
@@ -178,6 +209,10 @@
     <div class="flex items-center gap-3 px-3 py-2.5 text-neutral-400 hover:bg-[var(--primary-dim)] hover:text-[var(--primary)] transition-all cursor-pointer" onclick="openTasksModal()">
       <span class="material-symbols-outlined text-sm">checklist</span>
       <span class="text-xs font-bold tracking-wider">MATRIZ TAREAS</span>
+    </div>
+    <div class="flex items-center gap-3 px-3 py-2.5 text-neutral-400 hover:bg-[var(--primary-dim)] hover:text-[var(--primary)] transition-all cursor-pointer" onclick="openSettingsModal()">
+      <span class="material-symbols-outlined text-sm">tune</span>
+      <span class="text-xs font-bold tracking-wider">CONFIGURACIÓN</span>
     </div>
     <a href="/download/jarvis.apk" download class="flex items-center gap-3 px-3 py-2.5 text-neutral-400 hover:bg-[var(--primary-dim)] hover:text-[var(--primary)] transition-all cursor-pointer">
       <span class="material-symbols-outlined text-sm">android</span>
@@ -423,6 +458,106 @@
   <button onclick="closeTasksModal()" class="mt-3 text-[10px] text-[var(--primary)]/60 hover:text-[var(--primary)] transition-colors tracking-widest">[ ESC PARA CERRAR ]</button>
 </div>
 
+<!-- ===== AJUSTES DE PERFIL & VOZ STARK OVERLAY ===== -->
+<div class="chat-overlay" id="settingsOverlay">
+  <div class="chat-container hud-bracket" style="max-width: 620px; height: 82vh;">
+    <!-- Settings Header -->
+    <div class="px-4 py-3 border-b border-[var(--border-color)]/60 flex justify-between items-center text-[11px] bg-black/40">
+      <span class="text-[var(--primary)] font-bold flex items-center gap-2">
+        <span class="material-symbols-outlined text-base">tune</span>
+        CENTRO DE CONTROL & PERSONALIZACIÓN STARK
+      </span>
+      <button onclick="closeSettingsModal()" class="hover:text-[var(--primary)] transition-colors text-[10px]">[ CERRAR ]</button>
+    </div>
+
+    <!-- Settings Content -->
+    <div class="flex-1 overflow-y-auto p-5 space-y-4 text-xs font-mono">
+      <!-- Identidad y Nombre -->
+      <div class="p-3 border border-[var(--border-color)] bg-black/40 rounded hud-bracket space-y-2">
+        <div class="text-[10px] text-[var(--primary)] font-bold tracking-wider flex items-center gap-1">
+          <span class="material-symbols-outlined text-sm">badge</span>
+          IDENTIDAD DE ACCESO (MULTI-USUARIO)
+        </div>
+        <div class="flex justify-between items-center text-[10px] text-neutral-400">
+          <span>Terminal ID:</span>
+          <span class="text-[var(--primary)] font-mono text-[9px] truncate max-w-[200px]" id="displayUserId">--</span>
+        </div>
+        <div>
+          <label class="block text-[10px] text-neutral-400 mb-1">Nombre para JARVIS (ej. Señor José, Carlos, Mamá):</label>
+          <input type="text" id="settingUserName" class="w-full bg-[var(--primary-dim)] border border-[var(--border-color)] p-2 text-[var(--primary-bright)] outline-none focus:border-[var(--primary)] text-xs" placeholder="Ingrese su nombre..." />
+        </div>
+      </div>
+
+      <!-- Personalización de Voz -->
+      <div class="p-3 border border-[var(--border-color)] bg-black/40 rounded hud-bracket space-y-3">
+        <div class="text-[10px] text-[var(--primary)] font-bold tracking-wider flex items-center gap-1">
+          <span class="material-symbols-outlined text-sm">record_voice_over</span>
+          CALIBRACIÓN DE VOZ J.A.R.V.I.S.
+        </div>
+        <div>
+          <label class="block text-[10px] text-neutral-400 mb-1">ElevenLabs Voice ID (Voz Clonada - Opcional):</label>
+          <input type="text" id="settingVoiceId" class="w-full bg-[var(--primary-dim)] border border-[var(--border-color)] p-2 text-[var(--primary-bright)] outline-none focus:border-[var(--primary)] text-xs" placeholder="Ej: onwK4e9ZLuTAKqWW03F9 o ID de voz clonada" />
+          <div class="text-[9px] text-neutral-400 mt-1">Si tiene una voz clonada de Milton Wolch o Paul Bettany en ElevenLabs, pegue el Voice ID aquí.</div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[10px] text-neutral-400 mb-1">Tono de Voz (Pitch):</label>
+            <select id="settingVoicePitch" class="w-full bg-[#0a151b] border border-[var(--border-color)] p-2 text-[var(--primary-bright)] outline-none text-xs">
+              <option value="-6Hz">Muy Grave / Solemne (-6Hz)</option>
+              <option value="-4Hz" selected>Grave J.A.R.V.I.S. Clásico (-4Hz)</option>
+              <option value="-2Hz">Sutil (-2Hz)</option>
+              <option value="+0Hz">Estándar (0Hz)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[10px] text-neutral-400 mb-1">Cadencia / Ritmo (Rate):</label>
+            <select id="settingVoiceRate" class="w-full bg-[#0a151b] border border-[var(--border-color)] p-2 text-[var(--primary-bright)] outline-none text-xs">
+              <option value="-6%">Pausado y Calculador (-6%)</option>
+              <option value="-4%" selected>Elegante J.A.R.V.I.S. (-4%)</option>
+              <option value="-2%">Moderado (-2%)</option>
+              <option value="+0%">Rápido (0%)</option>
+            </select>
+          </div>
+        </div>
+        <button onclick="testVoiceSettings()" class="w-full py-2 bg-[var(--primary-dim)] border border-[var(--primary)] text-[var(--primary)] text-[10px] font-bold hover:bg-[var(--primary)] hover:text-black transition-all">
+          PROBAR CALIBRACIÓN DE VOZ
+        </button>
+      </div>
+
+      <!-- Tema de Armadura Stark -->
+      <div class="p-3 border border-[var(--border-color)] bg-black/40 rounded hud-bracket space-y-2">
+        <div class="text-[10px] text-[var(--primary)] font-bold tracking-wider flex items-center gap-1">
+          <span class="material-symbols-outlined text-sm">palette</span>
+          TEMA VISUAL DE ARMADURA STARK
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <button onclick="applyTheme('lxxxv')" class="p-2 border border-[#00daf3] text-[#00daf3] bg-[#00daf3]/10 text-[10px] font-bold hover:bg-[#00daf3]/20">
+            MARK LXXXV (CIAN)
+          </button>
+          <button onclick="applyTheme('vii')" class="p-2 border border-[#ff2a44] text-[#ff2a44] bg-[#ff2a44]/10 text-[10px] font-bold hover:bg-[#ff2a44]/20">
+            MARK VII (ROJO/ORO)
+          </button>
+          <button onclick="applyTheme('stealth')" class="p-2 border border-[#818cf8] text-[#818cf8] bg-[#818cf8]/10 text-[10px] font-bold hover:bg-[#818cf8]/20">
+            STEALTH (AZUL INDIGO)
+          </button>
+          <button onclick="applyTheme('emerald')" class="p-2 border border-[#10b981] text-[#10b981] bg-[#10b981]/10 text-[10px] font-bold hover:bg-[#10b981]/20">
+            QUANTUM (ESMERALDA)
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Save Button Footer -->
+    <div class="p-4 border-t border-[var(--border-color)]/60 flex justify-end gap-3 bg-black/60">
+      <button onclick="saveSettings()" class="px-6 py-2 bg-[var(--primary)] text-black font-bold text-xs hover:brightness-125 transition-all">
+        GUARDAR CAMBIOS
+      </button>
+    </div>
+  </div>
+
+  <button onclick="closeSettingsModal()" class="mt-3 text-[10px] text-[var(--primary)]/60 hover:text-[var(--primary)] transition-colors tracking-widest">[ ESC PARA CERRAR ]</button>
+</div>
+
 <!-- ===== BOTÓN FLOTANTE MÓVIL (QUICK-TALK ARC REACTOR FAB) ===== -->
 <div id="mobileQuickTalkFab" onclick="quickVoiceTrigger()" class="fixed bottom-6 right-6 md:hidden z-50 flex items-center justify-center w-14 h-14 rounded-full bg-[#0a151b]/95 border-2 border-[var(--primary)] shadow-[0_0_25px_var(--primary-glow)] cursor-pointer hover:scale-110 active:scale-95 transition-all" title="JARVIS Voz Rápida">
   <span class="material-symbols-outlined text-2xl text-[var(--primary)] animate-pulse" id="fabMicIcon">mic</span>
@@ -455,6 +590,39 @@
 </div>
 
 <script>
+// ==========================================
+// 0. MULTI-USER IDENTITY & THEMES
+// ==========================================
+function getUserId() {
+  let uid = localStorage.getItem('stark_user_id');
+  if (!uid) {
+    uid = 'stark_' + Math.random().toString(36).substring(2, 8) + Date.now().toString(36);
+    localStorage.setItem('stark_user_id', uid);
+  }
+  return uid;
+}
+
+function getAuthHeaders(extra = {}) {
+  return {
+    'Content-Type': 'application/json',
+    'X-User-Id': getUserId(),
+    ...extra
+  };
+}
+
+function applyTheme(themeName) {
+  document.body.classList.remove('theme-lxxxv', 'theme-vii', 'theme-stealth', 'theme-emerald', 'combat-mode');
+  if (themeName === 'vii') document.body.classList.add('theme-vii');
+  else if (themeName === 'stealth') document.body.classList.add('theme-stealth');
+  else if (themeName === 'emerald') document.body.classList.add('theme-emerald');
+  else document.body.classList.add('theme-lxxxv');
+  localStorage.setItem('stark_theme', themeName);
+}
+
+// Restore saved theme on startup
+const savedTheme = localStorage.getItem('stark_theme') || 'lxxxv';
+applyTheme(savedTheme);
+
 // ==========================================
 // 1. CLOCK & REAL TELEMETRY
 // ==========================================
@@ -517,7 +685,7 @@ let historyLoaded = false;
 async function loadHistory() {
   if (historyLoaded) return;
   try {
-    const res = await fetch('/history');
+    const res = await fetch('/history', { headers: getAuthHeaders() });
     const data = await res.json();
     const box = document.getElementById('chatBox');
     
@@ -529,7 +697,13 @@ async function loadHistory() {
         box.innerHTML += `<div class="msg ${isBot ? 'msg-bot' : 'msg-user'}">${formatted}</div>`;
       });
     } else {
-      box.innerHTML = `<div class="msg msg-bot">Sistemas en línea, Señor. Todos los protocolos están activos y vinculados con Gemini 2.5 Flash. ¿Cuáles son sus órdenes?</div>`;
+      box.innerHTML = `
+        <div class="msg msg-bot">
+          <strong style="color:var(--primary)">[PROTOCOLO STARK INICIALIZADO]</strong><br>
+          Enlace neuronal seguro establecido con su terminal.<br>
+          Soy J.A.R.V.I.S., su asistente de inteligencia artificial personal.<br><br>
+          ¿Cómo desea que me dirija a usted, Señor? Puede decirme su nombre (ej. <em>"Me llamo Carlos"</em>) o pedirme cualquier tarea (reproducir música, recordatorios o cálculos).
+        </div>`;
     }
     box.scrollTop = box.scrollHeight;
     historyLoaded = true;
@@ -539,10 +713,10 @@ async function loadHistory() {
 }
 
 async function clearChatHistory() {
-  if (!confirm('¿Desea reiniciar la memoria neuronal de JARVIS, Señor?')) return;
+  if (!confirm('¿Desea reiniciar la memoria neuronal de JARVIS para su perfil, Señor?')) return;
   try {
-    await fetch('/reset', { method: 'POST' });
-    document.getElementById('chatBox').innerHTML = `<div class="msg msg-bot">Memoria y registros reiniciados, Señor. Todos los sistemas en estado inicial.</div>`;
+    await fetch('/reset', { method: 'POST', headers: getAuthHeaders() });
+    document.getElementById('chatBox').innerHTML = `<div class="msg msg-bot">Memoria y registros de usuario reiniciados, Señor. Todos los sistemas en estado inicial.</div>`;
     speakNativeOrNeural('Memoria reiniciada, Señor.');
   } catch (e) {
     console.error(e);
@@ -608,7 +782,7 @@ function speakNativeOrNeural(text, audioUrl = null) {
   } else {
     fetch('/tts', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: getAuthHeaders(),
       body: JSON.stringify({ text })
     })
     .then(r => r.json())
@@ -741,7 +915,7 @@ async function sendStream() {
   try {
     const response = await fetch('/chat-stream', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: getAuthHeaders(),
       body: JSON.stringify({ message: text })
     });
 
@@ -971,7 +1145,7 @@ async function toggleCombatMode() {
   // Save preference
   fetch('/preferences', {
     method: 'POST',
-    headers: {'Content-Type': 'application/json'},
+    headers: getAuthHeaders(),
     body: JSON.stringify({ combat_mode: isCombatMode ? 'true' : 'false' })
   }).catch(() => {});
 }
@@ -1006,7 +1180,7 @@ function closeTasksModal() {
 async function loadTasks() {
   const container = document.getElementById('tasksContainer');
   try {
-    const res = await fetch('/tasks');
+    const res = await fetch('/tasks', { headers: getAuthHeaders() });
     const data = await res.json();
     renderTasks(data.tasks || []);
   } catch (err) {
@@ -1064,7 +1238,7 @@ async function submitNewTask() {
   try {
     const res = await fetch('/tasks', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: getAuthHeaders(),
       body: JSON.stringify({ title })
     });
     const data = await res.json();
@@ -1079,7 +1253,7 @@ async function toggleTask(id) {
   try {
     const res = await fetch('/tasks/complete', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: getAuthHeaders(),
       body: JSON.stringify({ id })
     });
     const data = await res.json();
@@ -1091,7 +1265,10 @@ async function toggleTask(id) {
 
 async function removeTask(id) {
   try {
-    const res = await fetch(`/tasks/${id}`, { method: 'DELETE' });
+    const res = await fetch(`/tasks/${id}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders()
+    });
     const data = await res.json();
     renderTasks(data.tasks || []);
   } catch (err) {
@@ -1100,7 +1277,107 @@ async function removeTask(id) {
 }
 
 // ==========================================
-// 8. MOBILE FLOATING ACTION & PHONE CALL BRIDGE
+// 8. SETTINGS MODAL & PROFILE CONTROL
+// ==========================================
+function openSettingsModal() {
+  const modal = document.getElementById('settingsOverlay');
+  modal.classList.add('active');
+  loadSettings();
+}
+
+function closeSettingsModal() {
+  const modal = document.getElementById('settingsOverlay');
+  modal.classList.remove('active');
+}
+
+async function loadSettings() {
+  const uidDisplay = document.getElementById('displayUserId');
+  if (uidDisplay) uidDisplay.textContent = getUserId();
+
+  try {
+    const res = await fetch('/preferences', { headers: getAuthHeaders() });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.user_name && document.getElementById('settingUserName')) {
+      document.getElementById('settingUserName').value = data.user_name;
+    }
+    if (data.voice_id && document.getElementById('settingVoiceId')) {
+      document.getElementById('settingVoiceId').value = data.voice_id;
+    }
+    if (data.voice_pitch && document.getElementById('settingVoicePitch')) {
+      document.getElementById('settingVoicePitch').value = data.voice_pitch;
+    }
+    if (data.voice_rate && document.getElementById('settingVoiceRate')) {
+      document.getElementById('settingVoiceRate').value = data.voice_rate;
+    }
+    if (data.theme) {
+      applyTheme(data.theme);
+    }
+  } catch (err) {
+    console.error('Error cargando preferencias:', err);
+  }
+}
+
+async function saveSettings() {
+  const userName = document.getElementById('settingUserName').value.trim();
+  const voiceId = document.getElementById('settingVoiceId').value.trim();
+  const voicePitch = document.getElementById('settingVoicePitch').value;
+  const voiceRate = document.getElementById('settingVoiceRate').value;
+  const currentTheme = localStorage.getItem('stark_theme') || 'lxxxv';
+
+  try {
+    const res = await fetch('/preferences', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        user_name: userName,
+        voice_id: voiceId,
+        voice_pitch: voicePitch,
+        voice_rate: voiceRate,
+        theme: currentTheme
+      })
+    });
+    if (res.ok) {
+      closeSettingsModal();
+      speakNativeOrNeural('Parámetros de enlace Stark guardados correctamente, ' + (userName || 'Señor') + '.');
+    }
+  } catch (err) {
+    alert('Error al guardar ajustes: ' + err.message);
+  }
+}
+
+async function testVoiceSettings() {
+  const voiceId = document.getElementById('settingVoiceId').value.trim();
+  const voicePitch = document.getElementById('settingVoicePitch').value;
+  const voiceRate = document.getElementById('settingVoiceRate').value;
+  const userName = document.getElementById('settingUserName').value.trim() || 'Señor';
+
+  const testText = `Calibración acústica completada, ${userName}. Sistemas vocales de J.A.R.V.I.S. sincronizados y operando a su entera disposición.`;
+  
+  try {
+    const res = await fetch('/tts', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        text: testText,
+        voice_id: voiceId,
+        voice_pitch: voicePitch,
+        voice_rate: voiceRate
+      })
+    });
+    const d = await res.json();
+    if (d.audio_url) {
+      playAudioUrl(d.audio_url);
+    } else {
+      speakNativeFallback(testText);
+    }
+  } catch (err) {
+    speakNativeFallback(testText);
+  }
+}
+
+// ==========================================
+// 9. MOBILE FLOATING ACTION & PHONE CALL BRIDGE
 // ==========================================
 function quickVoiceTrigger() {
   const chat = document.getElementById('chatOverlay');
@@ -1123,6 +1400,7 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     closeChat();
     closeTasksModal();
+    closeSettingsModal();
   }
 });
 </script>
