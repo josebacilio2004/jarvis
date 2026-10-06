@@ -256,6 +256,7 @@ public class MainActivity extends AppCompatActivity {
         prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
 
         webView = findViewById(R.id.jarvisWebView);
+        webView.setBackgroundColor(0xFF0A151B);
         swipeRefresh = findViewById(R.id.swipeRefresh);
 
         // Keep CPU awake for uninterrupted background audio playback
@@ -333,12 +334,31 @@ public class MainActivity extends AppCompatActivity {
                 return false;
             }
 
+            private void handleLoadError(WebView view) {
+                swipeRefresh.setRefreshing(false);
+                String offlineHtml = "<html><body style='background:#0a151b;color:#00daf3;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;padding:24px;text-align:center;box-sizing:border-box;'>"
+                        + "<div style='font-size:36px;margin-bottom:12px;'>⚠️</div>"
+                        + "<h2 style='color:#ff2a44;margin:0 0 12px 0;letter-spacing:1px;font-size:18px;'>[ENLACE DESCONECTADO]</h2>"
+                        + "<p style='color:#d9e4ed;font-size:13px;line-height:1.6;margin:0 0 16px 0;'>No se pudo conectar a:<br><strong style='color:#00daf3;word-break:break-all;'>" + getServerUrl() + "</strong></p>"
+                        + "<p style='color:#849396;font-size:12px;margin:0 0 24px 0;line-height:1.5;'>Asegúrese de que el servidor est&eacute; iniciado con <code>python app.py</code> y que su tel&eacute;fono est&eacute; en la misma red Wi-Fi (o use su URL de Render).</p>"
+                        + "<button onclick='location.reload()' style='background:#00daf3;color:#000;border:none;padding:12px 24px;font-weight:bold;font-size:13px;border-radius:4px;cursor:pointer;margin-bottom:14px;box-shadow:0 0 15px rgba(0,218,243,0.4);'>REINTENTAR ENLACE</button>"
+                        + "<p style='color:#555;font-size:11px;margin-top:10px;'>Mantenga presionada la pantalla para cambiar la IP o ingresar la URL de Render.</p>"
+                        + "</body></html>";
+                view.loadDataWithBaseURL(null, offlineHtml, "text/html", "utf-8", null);
+                showConnectionErrorDialog();
+            }
+
             @Override
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
-                swipeRefresh.setRefreshing(false);
                 if (request.isForMainFrame()) {
-                    showConnectionErrorDialog();
+                    handleLoadError(view);
                 }
+            }
+
+            @SuppressWarnings("deprecation")
+            @Override
+            public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
+                handleLoadError(view);
             }
         });
 
