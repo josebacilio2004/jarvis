@@ -858,14 +858,13 @@ function playAmbientSong(title, streamUrl, watchUrl, videoId) {
         window.AndroidBridge.showMediaNotification(title || 'Música Stark', 'Sintonizando en segundo plano');
       }
     }).catch(err => {
-      console.warn('Direct stream autoplay prevented, ready to open link:', err);
-      ambientIcon.textContent = 'open_in_new';
+      console.warn('Direct stream autoplay prevented:', err);
+      ambientIcon.textContent = 'play_arrow';
     });
   } else {
-    ambientIcon.textContent = 'open_in_new';
-    if (watchUrl) {
-      openExternalUrl(watchUrl);
-    }
+    // Stream direct link not available; stays within app (no automatic browser redirection)
+    ambientIcon.textContent = 'music_note';
+    setBarsSpeaking(true);
   }
 
   ambientPlayer.onended = () => {
@@ -992,24 +991,40 @@ async function sendStream() {
         const videoId = finalAction.video_id;
 
         const mediaCard = document.createElement('div');
-        mediaCard.className = 'mt-3 p-3 border border-[var(--primary)] bg-black/90 rounded flex items-center justify-between gap-3 text-xs shadow-[0_0_15px_var(--primary-glow)] hud-bracket';
-        mediaCard.innerHTML = `
-          <div class="flex items-center gap-2.5 truncate">
-            <span class="material-symbols-outlined text-sm text-[var(--primary)] animate-pulse">graphic_eq</span>
-            <div class="flex flex-col truncate">
-              <span class="text-[9px] text-[var(--primary)]/70 tracking-widest font-bold">CANAL DE AUDIO AMBIENTAL</span>
-              <span class="text-xs text-[var(--primary)] font-bold truncate">${songTitle}</span>
+        mediaCard.className = 'mt-3 p-3 border border-[var(--primary)] bg-black/90 rounded flex flex-col gap-2.5 text-xs shadow-[0_0_15px_var(--primary-glow)] hud-bracket';
+        
+        let headerHtml = `
+          <div class="flex items-center justify-between gap-3">
+            <div class="flex items-center gap-2.5 truncate">
+              <span class="material-symbols-outlined text-sm text-[var(--primary)] animate-pulse">graphic_eq</span>
+              <div class="flex flex-col truncate">
+                <span class="text-[9px] text-[var(--primary)]/70 tracking-widest font-bold">CANAL DE AUDIO AMBIENTAL</span>
+                <span class="text-xs text-[var(--primary)] font-bold truncate">${songTitle}</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 flex-shrink-0">
+              ${streamUrl ? `
+                <button onclick="toggleAmbientMusic()" class="px-2 py-1 bg-[var(--primary-dim)] border border-[var(--primary)] text-[var(--primary)] text-[10px] font-bold hover:bg-[var(--primary)] hover:text-black transition-all">
+                  PAUSAR/PLAY
+                </button>
+              ` : ''}
+              <button onclick="openExternalUrl('${watchUrl.replace(/'/g, "\\'")}')" class="px-2 py-1 bg-[var(--primary-dim)] border border-[var(--border-color)] text-[var(--primary)] text-[10px] font-bold hover:bg-[var(--primary)] hover:text-black transition-all" title="Abrir video en YouTube">
+                YOUTUBE ↗
+              </button>
             </div>
           </div>
-          <div class="flex items-center gap-2 flex-shrink-0">
-            <button onclick="toggleAmbientMusic()" class="px-2 py-1 bg-[var(--primary-dim)] border border-[var(--primary)] text-[var(--primary)] text-[10px] font-bold hover:bg-[var(--primary)] hover:text-black transition-all">
-              PAUSAR/PLAY
-            </button>
-            <button onclick="openExternalUrl('${watchUrl.replace(/'/g, "\\'")}')" class="px-2 py-1 bg-[var(--primary-dim)] border border-[var(--border-color)] text-[var(--primary)] text-[10px] font-bold hover:bg-[var(--primary)] hover:text-black transition-all" title="Abrir video en YouTube">
-              YOUTUBE ↗
-            </button>
-          </div>
         `;
+
+        let embedHtml = '';
+        if (!streamUrl && videoId) {
+          embedHtml = `
+            <div class="w-full aspect-video rounded overflow-hidden border border-[var(--border-color)]/70 bg-black">
+              <iframe class="w-full h-full" src="https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&playsinline=1" title="${songTitle}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+            </div>
+          `;
+        }
+
+        mediaCard.innerHTML = headerHtml + embedHtml;
         botBubble.appendChild(mediaCard);
         box.scrollTop = box.scrollHeight;
 
