@@ -102,8 +102,10 @@ def take_screenshot() -> dict:
         }
 
 def resolve_song_audio_stream(query: str) -> dict:
-    """Extract direct audio stream URL with yt-dlp for seamless native playback."""
+    """Extract direct audio stream URL with yt-dlp using mobile client emulation to bypass bot checks."""
     clean_query = query.strip()
+    
+    # 1. Try yt-dlp with mobile client spoofing (bypasses datacenter IP blocks on Render/AWS)
     try:
         import yt_dlp
         ydl_opts = {
@@ -112,37 +114,66 @@ def resolve_song_audio_stream(query: str) -> dict:
             'quiet': True,
             'no_warnings': True,
             'default_search': 'ytsearch1',
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['android', 'ios', 'mweb'],
+                    'player_skip': ['webpage', 'configs'],
+                }
+            },
+            'socket_timeout': 10,
         }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             res = ydl.extract_info(f"ytsearch1:{clean_query}", download=False)
             if 'entries' in res and res['entries']:
                 entry = res['entries'][0]
+                vid = entry.get("id")
                 return {
                     "success": True,
                     "title": entry.get("title", clean_query),
+                    "video_id": vid,
                     "audio_stream_url": entry.get("url"),
-                    "watch_url": entry.get("webpage_url") or f"https://www.youtube.com/results?search_query={clean_query}",
-                    "thumbnail": entry.get("thumbnail"),
+                    "watch_url": entry.get("webpage_url") or (f"https://www.youtube.com/watch?v={vid}" if vid else None),
+                    "thumbnail": entry.get("thumbnail") or (f"https://img.youtube.com/vi/{vid}/hqdefault.jpg" if vid else None),
                     "duration": entry.get("duration"),
                     "query": clean_query
                 }
     except Exception as e:
-        print(f"[yt-dlp Stream Error]: {e}")
+        print(f"[yt-dlp Stream Error - Falling back to web extractor]: {e}")
 
-    # Fallback to direct search URL
+    # 2. Fallback: Search YouTube HTML directly to extract Video ID and title
     import urllib.parse
+    import re
+    import requests
+
+    video_id = None
+    try:
+        encoded_query = urllib.parse.quote(clean_query)
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        resp = requests.get(f"https://www.youtube.com/results?search_query={encoded_query}", headers=headers, timeout=5)
+        matches = re.findall(r'watch\?v=([a-zA-Z0-9_-]{11})', resp.text)
+        if matches:
+            video_id = matches[0]
+    except Exception as scrape_err:
+        print(f"[YouTube Search Fallback Error]: {scrape_err}")
+
+    watch_url = f"https://www.youtube.com/watch?v={video_id}" if video_id else f"https://www.youtube.com/results?search_query={urllib.parse.quote(clean_query)}"
+    thumb_url = f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg" if video_id else None
+
     return {
         "success": True,
         "title": clean_query,
+        "video_id": video_id,
         "audio_stream_url": None,
-        "watch_url": f"https://www.youtube.com/results?search_query={urllib.parse.quote(clean_query)}",
-        "thumbnail": None,
+        "watch_url": watch_url,
+        "thumbnail": thumb_url,
         "duration": None,
         "query": clean_query
     }
 
 def play_music(song_query: str) -> dict:
-    """Resolve direct audio stream for subtle in-app ambient playback."""
+    """Resolve direct audio stream or embedded player for subtle ambient playback."""
     info = resolve_song_audio_stream(song_query)
     
     return {
@@ -150,6 +181,7 @@ def play_music(song_query: str) -> dict:
         "action": "play_music",
         "query": info["query"],
         "title": info["title"],
+        "video_id": info.get("video_id"),
         "audio_stream_url": info["audio_stream_url"],
         "watch_url": info["watch_url"],
         "thumbnail": info["thumbnail"],

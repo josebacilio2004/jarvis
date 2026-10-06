@@ -810,45 +810,63 @@ const ambientTitle = document.getElementById('ambientSongTitle');
 const ambientIcon = document.getElementById('ambientIcon');
 const ambientLink = document.getElementById('ambientExternalLink');
 
-function playAmbientSong(title, streamUrl, watchUrl) {
-  if (!streamUrl) {
-    if (watchUrl) window.open(watchUrl, '_blank');
-    return;
+function openExternalUrl(url) {
+  if (!url) return;
+  if (window.AndroidBridge && window.AndroidBridge.openBrowser) {
+    window.AndroidBridge.openBrowser(url);
+  } else {
+    window.open(url, '_blank') || (window.location.href = url);
   }
+}
+
+function playAmbientSong(title, streamUrl, watchUrl, videoId) {
   ambientTitle.textContent = title || 'Pista de Audio';
   ambientLink.href = watchUrl || '#';
-  ambientPlayer.src = streamUrl;
-  ambientPlayer.volume = 0.85;
+  ambientLink.onclick = (e) => {
+    e.preventDefault();
+    openExternalUrl(watchUrl);
+  };
 
-  ambientPlayer.play().then(() => {
-    ambientDock.classList.remove('hidden');
-    ambientDock.classList.add('flex');
-    ambientIcon.textContent = 'pause';
-    setBarsSpeaking(true);
+  ambientDock.classList.remove('hidden');
+  ambientDock.classList.add('flex');
 
-    // Register Background MediaSession for Android lockscreen and persistent background playback
-    if ('mediaSession' in navigator) {
-      navigator.mediaSession.metadata = new MediaMetadata({
-        title: title || 'Música Stark Ambient',
-        artist: 'J.A.R.V.I.S. Audio Stream',
-        album: 'Industrias Stark',
-        artwork: [
-          { src: '/static/jarvis_core.png', sizes: '192x192', type: 'image/png' },
-          { src: '/static/jarvis_core.png', sizes: '512x512', type: 'image/png' }
-        ]
-      });
-      navigator.mediaSession.setActionHandler('play', () => toggleAmbientMusic());
-      navigator.mediaSession.setActionHandler('pause', () => toggleAmbientMusic());
-      navigator.mediaSession.setActionHandler('stop', () => stopAmbientMusic());
+  if (streamUrl) {
+    ambientPlayer.src = streamUrl;
+    ambientPlayer.volume = 0.85;
+
+    ambientPlayer.play().then(() => {
+      ambientIcon.textContent = 'pause';
+      setBarsSpeaking(true);
+
+      // Register Background MediaSession for Android lockscreen and persistent background playback
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: title || 'Música Stark Ambient',
+          artist: 'J.A.R.V.I.S. Audio Stream',
+          album: 'Industrias Stark',
+          artwork: [
+            { src: '/static/jarvis_core.png', sizes: '192x192', type: 'image/png' },
+            { src: '/static/jarvis_core.png', sizes: '512x512', type: 'image/png' }
+          ]
+        });
+        navigator.mediaSession.setActionHandler('play', () => toggleAmbientMusic());
+        navigator.mediaSession.setActionHandler('pause', () => toggleAmbientMusic());
+        navigator.mediaSession.setActionHandler('stop', () => stopAmbientMusic());
+      }
+      // Call Android native bridge to show persistent system notification
+      if (window.AndroidBridge && window.AndroidBridge.showMediaNotification) {
+        window.AndroidBridge.showMediaNotification(title || 'Música Stark', 'Sintonizando en segundo plano');
+      }
+    }).catch(err => {
+      console.warn('Direct stream autoplay prevented, ready to open link:', err);
+      ambientIcon.textContent = 'open_in_new';
+    });
+  } else {
+    ambientIcon.textContent = 'open_in_new';
+    if (watchUrl) {
+      openExternalUrl(watchUrl);
     }
-    // Call Android native bridge to show persistent system notification
-    if (window.AndroidBridge && window.AndroidBridge.showMediaNotification) {
-      window.AndroidBridge.showMediaNotification(title || 'Música Stark', 'Sintonizando en segundo plano');
-    }
-  }).catch(err => {
-    console.warn('Autoplay prevented, opening watch link:', err);
-    if (watchUrl) window.open(watchUrl, '_blank');
-  });
+  }
 
   ambientPlayer.onended = () => {
     ambientDock.classList.add('hidden');
@@ -971,6 +989,7 @@ async function sendStream() {
         const songTitle = finalAction.title || finalAction.query || 'Pista de Audio';
         const streamUrl = finalAction.audio_stream_url;
         const watchUrl = finalAction.watch_url;
+        const videoId = finalAction.video_id;
 
         const mediaCard = document.createElement('div');
         mediaCard.className = 'mt-3 p-3 border border-[var(--primary)] bg-black/90 rounded flex items-center justify-between gap-3 text-xs shadow-[0_0_15px_var(--primary-glow)] hud-bracket';
@@ -986,16 +1005,16 @@ async function sendStream() {
             <button onclick="toggleAmbientMusic()" class="px-2 py-1 bg-[var(--primary-dim)] border border-[var(--primary)] text-[var(--primary)] text-[10px] font-bold hover:bg-[var(--primary)] hover:text-black transition-all">
               PAUSAR/PLAY
             </button>
-            <a href="${watchUrl}" target="_blank" class="px-2 py-1 bg-[var(--primary-dim)] border border-[var(--border-color)] text-[var(--primary)] text-[10px] font-bold hover:bg-[var(--primary)] hover:text-black transition-all" title="Abrir video en YouTube">
+            <button onclick="openExternalUrl('${watchUrl.replace(/'/g, "\\'")}')" class="px-2 py-1 bg-[var(--primary-dim)] border border-[var(--border-color)] text-[var(--primary)] text-[10px] font-bold hover:bg-[var(--primary)] hover:text-black transition-all" title="Abrir video en YouTube">
               YOUTUBE ↗
-            </a>
+            </button>
           </div>
         `;
         botBubble.appendChild(mediaCard);
         box.scrollTop = box.scrollHeight;
 
-        // Start subtle ambient playback
-        playAmbientSong(songTitle, streamUrl, watchUrl);
+        // Start ambient playback
+        playAmbientSong(songTitle, streamUrl, watchUrl, videoId);
       } else if (finalAction.action === 'call') {
         const target = finalAction.target;
         const callCard = document.createElement('div');

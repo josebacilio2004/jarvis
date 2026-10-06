@@ -115,6 +115,19 @@ public class MainActivity extends AppCompatActivity {
         }
 
         @JavascriptInterface
+        public void openBrowser(String url) {
+            runOnUiThread(() -> {
+                try {
+                    Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                    intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    mContext.startActivity(intent);
+                } catch (Exception e) {
+                    Toast.makeText(mContext, "Error al abrir enlace: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
+
+        @JavascriptInterface
         public void showToast(String msg) {
             runOnUiThread(() -> Toast.makeText(mContext, msg, Toast.LENGTH_SHORT).show());
         }
@@ -321,7 +334,8 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 String url = request.getUrl().toString();
-                if (url.startsWith("tel:") || url.startsWith("mailto:") || url.startsWith("sms:") || url.startsWith("intent:")) {
+                if (url.startsWith("tel:") || url.startsWith("mailto:") || url.startsWith("sms:") || url.startsWith("intent:") ||
+                    url.contains("youtube.com") || url.contains("youtu.be")) {
                     try {
                         Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
                         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
