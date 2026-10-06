@@ -15,6 +15,10 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.PowerManager;
+import android.os.Vibrator;
+import android.os.VibrationEffect;
+import android.hardware.camera2.CameraManager;
+import android.provider.AlarmClock;
 import android.provider.ContactsContract;
 import android.view.View;
 import android.webkit.JavascriptInterface;
@@ -128,8 +132,93 @@ public class MainActivity extends AppCompatActivity {
         }
 
         @JavascriptInterface
-        public void showToast(String msg) {
-            runOnUiThread(() -> Toast.makeText(mContext, msg, Toast.LENGTH_SHORT).show());
+        public void setAlarm(int hour, int minute, String message) {
+            runOnUiThread(() -> {
+                try {
+                    Intent intent = new Intent(AlarmClock.ACTION_SET_ALARM);
+                    intent.putExtra(AlarmClock.EXTRA_HOUR, hour);
+                    intent.putExtra(AlarmClock.EXTRA_MINUTES, minute);
+                    intent.putExtra(AlarmClock.EXTRA_MESSAGE, (message != null && !message.isEmpty()) ? message : "Alarma J.A.R.V.I.S.");
+                    intent.putExtra(AlarmClock.EXTRA_SKIP_UI, false);
+                    intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    mContext.startActivity(intent);
+                    Toast.makeText(mContext, "Alarma programada a las " + String.format("%02d:%02d", hour, minute), Toast.LENGTH_SHORT).show();
+                } catch (Exception e) {
+                    Toast.makeText(mContext, "Error al programar alarma: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void setTimer(int seconds, String message) {
+            runOnUiThread(() -> {
+                try {
+                    Intent intent = new Intent(AlarmClock.ACTION_SET_TIMER);
+                    intent.putExtra(AlarmClock.EXTRA_LENGTH, seconds);
+                    intent.putExtra(AlarmClock.EXTRA_MESSAGE, (message != null && !message.isEmpty()) ? message : "Temporizador J.A.R.V.I.S.");
+                    intent.putExtra(AlarmClock.EXTRA_SKIP_UI, false);
+                    intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    mContext.startActivity(intent);
+                    Toast.makeText(mContext, "Temporizador de " + seconds + " seg activado", Toast.LENGTH_SHORT).show();
+                } catch (Exception e) {
+                    Toast.makeText(mContext, "Error al iniciar temporizador: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void toggleFlashlight(boolean enable) {
+            runOnUiThread(() -> {
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        CameraManager cm = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
+                        if (cm != null) {
+                            String cameraId = cm.getCameraIdList()[0];
+                            cm.setTorchMode(cameraId, enable);
+                            Toast.makeText(mContext, enable ? "Linterna activada" : "Linterna desactivada", Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                } catch (Exception e) {
+                    Toast.makeText(mContext, "Error linterna: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void vibratePhone(int milliseconds) {
+            runOnUiThread(() -> {
+                try {
+                    Vibrator v = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+                    if (v != null && v.hasVibrator()) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            v.vibrate(VibrationEffect.createOneShot(milliseconds > 0 ? milliseconds : 200, VibrationEffect.DEFAULT_AMPLITUDE));
+                        } else {
+                            v.vibrate(milliseconds > 0 ? milliseconds : 200);
+                        }
+                    }
+                } catch (Exception e) {}
+            });
+        }
+
+        @JavascriptInterface
+        public void openMaps(String location) {
+            runOnUiThread(() -> {
+                try {
+                    Uri gmmIntentUri = Uri.parse("geo:0,0?q=" + Uri.encode(location));
+                    Intent mapIntent = new Intent(Intent.ACTION_VIEW, gmmIntentUri);
+                    mapIntent.setPackage("com.google.android.apps.maps");
+                    mapIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    if (mapIntent.resolveActivity(getPackageManager()) != null) {
+                        startActivity(mapIntent);
+                    } else {
+                        Intent genericMap = new Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/maps/search/?api=1&query=" + Uri.encode(location)));
+                        genericMap.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        startActivity(genericMap);
+                    }
+                } catch (Exception e) {
+                    Toast.makeText(mContext, "Error al abrir mapas: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+            });
         }
 
         @JavascriptInterface

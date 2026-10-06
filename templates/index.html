@@ -750,9 +750,24 @@ function setBarsSpeaking(active) {
   });
 }
 
-audioElement.onplay = () => setBarsSpeaking(true);
-audioElement.onended = () => setBarsSpeaking(false);
-audioElement.onerror = () => setBarsSpeaking(false);
+audioElement.onplay = () => {
+  setBarsSpeaking(true);
+  if (ambientPlayer && !ambientPlayer.paused) {
+    ambientPlayer.volume = 0.2;
+  }
+};
+audioElement.onended = () => {
+  setBarsSpeaking(false);
+  if (ambientPlayer && !ambientPlayer.paused) {
+    ambientPlayer.volume = 0.85;
+  }
+};
+audioElement.onerror = () => {
+  setBarsSpeaking(false);
+  if (ambientPlayer && !ambientPlayer.paused) {
+    ambientPlayer.volume = 0.85;
+  }
+};
 
 async function playAudioUrl(url) {
   if (!url) return;
@@ -916,8 +931,11 @@ async function sendStream() {
   const text = input.value.trim();
   if (!text) return;
 
-  // Add user bubble
-  box.innerHTML += `<div class="msg msg-user">${formatMarkdown(text)}</div>`;
+  // Add user bubble cleanly using appendChild so existing audio/elements don't reset
+  const userBubble = document.createElement('div');
+  userBubble.className = 'msg msg-user';
+  userBubble.innerHTML = formatMarkdown(text);
+  box.appendChild(userBubble);
   input.value = '';
   box.scrollTop = box.scrollHeight;
   typing.classList.remove('hidden');
@@ -960,7 +978,7 @@ async function sendStream() {
             const data = JSON.parse(line.slice(6));
             if (data.chunk) {
               accumulatedText += data.chunk;
-              const cleanStreamingText = accumulatedText.replace(/\[?(?:ACCION:)?(?:REPRODUCIR|CREAR_TAREA|COMPLETAR_TAREA|LLAMAR|ABRIR|BUSCAR|CAPTURA):?[^\]]*\]?/gi, '').trim();
+              const cleanStreamingText = accumulatedText.replace(/\[?(?:ACCION:)?(?:REPRODUCIR|PLAY|CREAR_TAREA|TAREA|COMPLETAR_TAREA|TERMINAR_TAREA|LLAMAR|CALL|ABRIR|BUSCAR|CAPTURA|ALARMA|ALARM|TEMPORIZADOR|TIMER|LINTERNA|FLASHLIGHT|TORCH|MAPAS|MAPS|UBICACION|RUTA):?[^\]]*\]?/gi, '').trim();
               contentSpan.innerHTML = formatMarkdown(cleanStreamingText);
               box.scrollTop = box.scrollHeight;
             }
@@ -982,7 +1000,7 @@ async function sendStream() {
     const cursor = botBubble.querySelector('.typing-cursor');
     if (cursor) cursor.remove();
 
-    // Execute actions (music, call, tasks)
+    // Execute actions (music, call, alarms, timer, flashlight, maps, tasks)
     if (finalAction) {
       if (finalAction.action === 'play_music') {
         const songTitle = finalAction.title || finalAction.query || 'Pista de Audio';
@@ -1049,6 +1067,85 @@ async function sendStream() {
         botBubble.appendChild(callCard);
         box.scrollTop = box.scrollHeight;
         executePhoneCall(target);
+      } else if (finalAction.action === 'set_alarm') {
+        const hour = finalAction.hour;
+        const minute = finalAction.minute;
+        const msg = finalAction.message || 'Alarma';
+        const timeStr = String(hour).padStart(2, '0') + ':' + String(minute).padStart(2, '0');
+
+        const alarmCard = document.createElement('div');
+        alarmCard.className = 'mt-3 p-3 border border-[var(--primary)] bg-black/90 rounded flex items-center justify-between gap-3 text-xs shadow-[0_0_15px_var(--primary-glow)] hud-bracket';
+        alarmCard.innerHTML = `
+          <div class="flex items-center gap-2.5">
+            <span class="material-symbols-outlined text-base text-[var(--primary)] animate-pulse">alarm</span>
+            <div>
+              <div class="text-[9px] text-[var(--primary)]/70 tracking-widest font-bold">ALARMA NATIVA STARK</div>
+              <div class="text-xs text-[var(--primary)] font-bold">${timeStr} - ${escapeHtml(msg)}</div>
+            </div>
+          </div>
+          <button onclick="triggerNativeAlarm(${hour}, ${minute}, '${escapeHtml(msg)}')" class="px-3 py-1 bg-[var(--primary-dim)] border border-[var(--primary)] text-[var(--primary)] text-[10px] font-bold hover:bg-[var(--primary)] hover:text-black transition-all">
+            CONFIGURAR
+          </button>
+        `;
+        botBubble.appendChild(alarmCard);
+        box.scrollTop = box.scrollHeight;
+        triggerNativeAlarm(hour, minute, msg);
+      } else if (finalAction.action === 'set_timer') {
+        const secs = finalAction.seconds;
+        const msg = finalAction.message || 'Temporizador';
+
+        const timerCard = document.createElement('div');
+        timerCard.className = 'mt-3 p-3 border border-[var(--primary)] bg-black/90 rounded flex items-center justify-between gap-3 text-xs shadow-[0_0_15px_var(--primary-glow)] hud-bracket';
+        timerCard.innerHTML = `
+          <div class="flex items-center gap-2.5">
+            <span class="material-symbols-outlined text-base text-[var(--primary)] animate-pulse">timer</span>
+            <div>
+              <div class="text-[9px] text-[var(--primary)]/70 tracking-widest font-bold">TEMPORIZADOR NATIVO</div>
+              <div class="text-xs text-[var(--primary)] font-bold">${secs} segundos - ${escapeHtml(msg)}</div>
+            </div>
+          </div>
+          <button onclick="triggerNativeTimer(${secs}, '${escapeHtml(msg)}')" class="px-3 py-1 bg-[var(--primary-dim)] border border-[var(--primary)] text-[var(--primary)] text-[10px] font-bold hover:bg-[var(--primary)] hover:text-black transition-all">
+            INICIAR
+          </button>
+        `;
+        botBubble.appendChild(timerCard);
+        box.scrollTop = box.scrollHeight;
+        triggerNativeTimer(secs, msg);
+      } else if (finalAction.action === 'toggle_flashlight') {
+        const enable = finalAction.enable;
+        if (window.AndroidBridge && window.AndroidBridge.toggleFlashlight) {
+          window.AndroidBridge.toggleFlashlight(enable);
+        }
+        const flashCard = document.createElement('div');
+        flashCard.className = 'mt-3 p-3 border border-[var(--primary)] bg-black/90 rounded flex items-center gap-2.5 text-xs shadow-[0_0_15px_var(--primary-glow)] hud-bracket';
+        flashCard.innerHTML = `
+          <span class="material-symbols-outlined text-base text-[var(--primary)]">${enable ? 'flashlight_on' : 'flashlight_off'}</span>
+          <div>
+            <div class="text-[9px] text-[var(--primary)]/70 tracking-widest font-bold">LINTERNA DEL DISPOSITIVO</div>
+            <div class="text-xs text-[var(--primary)] font-bold">${enable ? 'Linterna activada' : 'Linterna desactivada'}</div>
+          </div>
+        `;
+        botBubble.appendChild(flashCard);
+        box.scrollTop = box.scrollHeight;
+      } else if (finalAction.action === 'open_maps') {
+        const loc = finalAction.location;
+        const mapCard = document.createElement('div');
+        mapCard.className = 'mt-3 p-3 border border-[var(--primary)] bg-black/90 rounded flex items-center justify-between gap-3 text-xs shadow-[0_0_15px_var(--primary-glow)] hud-bracket';
+        mapCard.innerHTML = `
+          <div class="flex items-center gap-2.5">
+            <span class="material-symbols-outlined text-base text-[var(--primary)] animate-pulse">map</span>
+            <div>
+              <div class="text-[9px] text-[var(--primary)]/70 tracking-widest font-bold">NAVEGACIÓN & MAPAS</div>
+              <div class="text-xs text-[var(--primary)] font-bold">${escapeHtml(loc)}</div>
+            </div>
+          </div>
+          <button onclick="triggerNativeMaps('${escapeHtml(loc)}')" class="px-3 py-1 bg-[var(--primary-dim)] border border-[var(--primary)] text-[var(--primary)] text-[10px] font-bold hover:bg-[var(--primary)] hover:text-black transition-all">
+            ABRIR MAPAS ↗
+          </button>
+        `;
+        botBubble.appendChild(mapCard);
+        box.scrollTop = box.scrollHeight;
+        triggerNativeMaps(loc);
       } else if (finalAction.action === 'create_task' || finalAction.action === 'complete_task') {
         loadTasks();
       }
@@ -1433,6 +1530,30 @@ function executePhoneCall(target) {
     window.AndroidBridge.makePhoneCall(target);
   } else {
     window.location.href = 'tel:' + encodeURIComponent(target);
+  }
+}
+
+function triggerNativeAlarm(hour, minute, msg) {
+  if (window.AndroidBridge && window.AndroidBridge.setAlarm) {
+    window.AndroidBridge.setAlarm(hour, minute, msg);
+  } else {
+    console.log(`[Stark Assistant] Alarma: ${hour}:${minute} - ${msg}`);
+  }
+}
+
+function triggerNativeTimer(seconds, msg) {
+  if (window.AndroidBridge && window.AndroidBridge.setTimer) {
+    window.AndroidBridge.setTimer(seconds, msg);
+  } else {
+    console.log(`[Stark Assistant] Temporizador: ${seconds}s - ${msg}`);
+  }
+}
+
+function triggerNativeMaps(location) {
+  if (window.AndroidBridge && window.AndroidBridge.openMaps) {
+    window.AndroidBridge.openMaps(location);
+  } else {
+    openExternalUrl(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`);
   }
 }
 

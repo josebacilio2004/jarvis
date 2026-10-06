@@ -45,6 +45,14 @@ CAPACIDADES MULTIMEDIA Y PROTOCOLOS DE ACCIÓN:
 [ACCION:COMPLETAR_TAREA:nombre_o_id]
 - Si el usuario te pide llamar o marcar a alguien ("llama a mamá", "marca a Juan de mis contactos", "haz una llamada a X"):
 [ACCION:LLAMAR:nombre_o_contacto]
+- Si el usuario te pide programar una alarma ("despiértame a las 7:00", "pon una alarma a las 08:30"):
+[ACCION:ALARMA:HH:MM:etiqueta] (ejemplo: [ACCION:ALARMA:07:30:Despertar])
+- Si te pide un temporizador o cuenta regresiva ("temporizador de 5 minutos", "cuenta regresiva de 30 segundos"):
+[ACCION:TEMPORIZADOR:segundos:etiqueta] (ejemplo: [ACCION:TEMPORIZADOR:300:Hervir pasta])
+- Si te pide encender o apagar la linterna ("enciende la linterna", "apaga la linterna", "luz"):
+[ACCION:LINTERNA:ON] o [ACCION:LINTERNA:OFF]
+- Si te pide cómo llegar a un lugar o abrir mapas ("cómo llego a X", "busca X en el mapa", "abre mapas en X"):
+[ACCION:MAPAS:lugar_o_direccion]
 - Si te pide abrir una aplicación (calculadora, bloc de notas, chrome, archivos):
 [ACCION:ABRIR:nombre_app]
 - Si te pide buscar en google o youtube:
@@ -135,7 +143,7 @@ def check_auto_name_discovery(mensaje: str, user_id: str):
 def execute_embedded_actions(text: str, user_id: str):
     """Detect and execute [ACCION:TIPO:OBJETO] or [TIPO:OBJETO] tags embedded in Gemini response."""
     action_match = re.search(r'\[(?:ACCION:)?(\w+)(?::([^\]]+))?\]', text)
-    clean_text = re.sub(r'\[?(?:ACCION:)?(?:REPRODUCIR|CREAR_TAREA|COMPLETAR_TAREA|LLAMAR|ABRIR|BUSCAR|CAPTURA):?[^\]]*\]?', '', text).strip()
+    clean_text = re.sub(r'\[?(?:ACCION:)?(?:REPRODUCIR|PLAY|CREAR_TAREA|TAREA|COMPLETAR_TAREA|TERMINAR_TAREA|LLAMAR|CALL|ABRIR|BUSCAR|CAPTURA|ALARMA|ALARM|TEMPORIZADOR|TIMER|LINTERNA|FLASHLIGHT|TORCH|MAPAS|MAPS|UBICACION|RUTA):?[^\]]*\]?', '', text).strip()
     action_result = None
     if action_match:
         act_type = action_match.group(1).upper()
@@ -161,6 +169,31 @@ def execute_embedded_actions(text: str, user_id: str):
                 action_result = {"success": False, "message": "Acceso restringido: Apertura remota de software reservada para el Administrador central (Nivel 5)."}
         elif act_type == "BUSCAR":
             action_result = os_control.web_search(act_target)
+        elif act_type in ["ALARMA", "ALARM"]:
+            parts = act_target.split(":")
+            hour = 7
+            minute = 0
+            label = "Alarma J.A.R.V.I.S."
+            if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
+                hour = int(parts[0])
+                minute = int(parts[1])
+            if len(parts) >= 3:
+                label = parts[2]
+            action_result = {"action": "set_alarm", "hour": hour, "minute": minute, "message": label}
+        elif act_type in ["TEMPORIZADOR", "TIMER"]:
+            parts = act_target.split(":")
+            secs = 300
+            label = "Temporizador J.A.R.V.I.S."
+            if parts and parts[0].isdigit():
+                secs = int(parts[0])
+            if len(parts) >= 2:
+                label = parts[1]
+            action_result = {"action": "set_timer", "seconds": secs, "message": label}
+        elif act_type in ["LINTERNA", "FLASHLIGHT", "TORCH"]:
+            enable = act_target.upper() in ["ON", "ENCENDER", "ACTIVAR", "SI", "TRUE"]
+            action_result = {"action": "toggle_flashlight", "enable": enable}
+        elif act_type in ["MAPAS", "MAPS", "UBICACION", "RUTA"]:
+            action_result = {"action": "open_maps", "location": act_target}
         elif act_type == "CAPTURA":
             if is_admin:
                 action_result = os_control.take_screenshot()
@@ -400,7 +433,7 @@ if __name__ == '__main__':
     print(f"Modelo IA:    {ACTIVE_MODEL}")
     print("Multi-Usuario: Activo (Aislamiento de sesiones)")
     print("Motor TTS:    ElevenLabs + Edge-TTS Mexican Neural")
-    print("Base de Datos: SQLite (jarvis.db)")
+    print(f"Base de Datos: {db.DB_TYPE.upper()}")
     print("Telemetría:   Activa")
     print(f"Puerto:       {port}")
     print("==========================================\n")

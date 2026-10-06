@@ -62,12 +62,19 @@ def get_system_telemetry():
         }
 
 def open_application(app_name: str) -> dict:
-    """Launch a Windows application by known name."""
+    """Launch an application safely by known name."""
+    if os.name != "nt":
+        return {"success": False, "message": "Apertura de software de escritorio no disponible en servidor en la nube, Señor."}
+
     clean_name = app_name.lower().strip()
-    cmd = APP_COMMANDS.get(clean_name)
     
+    # Security guard: Strict whitelist against command injection
+    import re
+    if not re.match(r'^[a-zA-Z0-9_\-\. ]+$', clean_name) or any(c in clean_name for c in ['&', ';', '|', '>', '<', '$', '`', '(', ')', '\\', '/']):
+        return {"success": False, "message": "Protocolo de seguridad activado: Caracteres no autorizados en el comando."}
+
+    cmd = APP_COMMANDS.get(clean_name)
     if not cmd:
-        # Fallback to direct execution via shell
         cmd = f"start {clean_name}"
     
     try:
