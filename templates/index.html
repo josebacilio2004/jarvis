@@ -487,11 +487,39 @@
         </div>
         <div class="flex justify-between items-center text-[10px] text-neutral-400">
           <span>Terminal ID:</span>
-          <span class="text-[var(--primary)] font-mono text-[9px] truncate max-w-[200px]" id="displayUserId">--</span>
+          <div class="flex items-center gap-2">
+            <span class="text-[var(--primary)] font-mono text-[9px] truncate max-w-[170px]" id="displayUserId">--</span>
+            <button onclick="copyTerminalId()" id="btnCopyTerminalId" type="button" class="text-[9px] px-2 py-0.5 border border-[var(--border-color)] text-[var(--primary)] hover:bg-[var(--primary-dim)] transition-colors">[ COPIAR ]</button>
+          </div>
         </div>
         <div>
           <label class="block text-[10px] text-neutral-400 mb-1">Nombre para JARVIS (ej. Señor José, Carlos, Mamá):</label>
           <input type="text" id="settingUserName" class="w-full bg-[var(--primary-dim)] border border-[var(--border-color)] p-2 text-[var(--primary-bright)] outline-none focus:border-[var(--primary)] text-xs" placeholder="Ingrese su nombre..." />
+        </div>
+      </div>
+
+      <!-- Enlace Remoto de Celular -->
+      <div class="p-3 border border-[var(--border-color)] bg-black/40 rounded hud-bracket space-y-2">
+        <div class="text-[10px] text-[var(--primary)] font-bold tracking-wider flex items-center justify-between">
+          <div class="flex items-center gap-1">
+            <span class="material-symbols-outlined text-sm">phonelink</span>
+            ENLACE REMOTO CON CELULAR (ANDROID)
+          </div>
+          <span class="text-[9px] text-emerald-400 font-normal">STARK RELAY ACTIVE</span>
+        </div>
+        <p class="text-[10px] text-neutral-400 leading-relaxed">
+          Para que tu teléfono ejecute música en YouTube, linterna, alarmas y llamadas cuando des órdenes desde esta computadora:
+        </p>
+        <ol class="list-decimal list-inside text-[9px] text-neutral-300 space-y-1">
+          <li>Abre la app J.A.R.V.I.S. en tu Android.</li>
+          <li>Toca el botón de ajustes (<span class="text-[var(--primary)] font-bold">tune</span>) arriba a la derecha.</li>
+          <li>En <span class="text-[var(--primary)] font-mono">Terminal User ID</span>, ingresa tu Terminal ID actual.</li>
+          <li>Presiona <span class="text-white font-bold">CONECTAR</span> en tu móvil.</li>
+        </ol>
+        <div class="pt-1 flex gap-2">
+          <button onclick="testMobileRemoteControl()" id="btnTestRemoteMobile" type="button" class="flex-1 py-1.5 border border-[var(--border-color)] bg-[var(--primary-dim)] text-[var(--primary-bright)] text-[10px] font-bold tracking-wider hover:bg-[var(--primary)] hover:text-black transition-all">
+            PROBAR PULSO REMOTO AL CELULAR
+          </button>
         </div>
       </div>
 
@@ -1554,6 +1582,53 @@ function triggerNativeMaps(location) {
     window.AndroidBridge.openMaps(location);
   } else {
     openExternalUrl(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`);
+  }
+}
+
+function copyTerminalId() {
+  const uid = getUserId();
+  navigator.clipboard.writeText(uid).then(() => {
+    const btn = document.getElementById('btnCopyTerminalId');
+    if (btn) {
+      btn.innerText = '[ COPIADO ]';
+      setTimeout(() => { btn.innerText = '[ COPIAR ]'; }, 2000);
+    }
+  }).catch(() => {
+    prompt('Copie su Terminal ID:', uid);
+  });
+}
+
+async function testMobileRemoteControl() {
+  const uid = getUserId();
+  const btn = document.getElementById('btnTestRemoteMobile');
+  if (btn) btn.innerText = 'ENVIANDO A MÓVIL...';
+  try {
+    const res = await fetch('/device-command', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-User-Id': uid },
+      body: JSON.stringify({
+        type: 'remote_action',
+        action: { action: 'toggle_flashlight', enable: true },
+        message: 'Ping de enlace remoto Stark exitoso'
+      })
+    });
+    if (res.ok) {
+      if (btn) btn.innerText = '¡ORDEN TRANSMITIDA CON ÉXITO!';
+      speakNativeOrNeural('Enlace verificado, Señor. Transmitiendo pulso a su terminal móvil.');
+      setTimeout(() => {
+        if (btn) btn.innerText = 'PROBAR PULSO REMOTO AL CELULAR';
+      }, 3500);
+    } else {
+      if (btn) btn.innerText = 'ERROR EN TRANSMISIÓN';
+      setTimeout(() => {
+        if (btn) btn.innerText = 'PROBAR PULSO REMOTO AL CELULAR';
+      }, 3000);
+    }
+  } catch (e) {
+    if (btn) btn.innerText = 'ERROR DE CONEXIÓN';
+    setTimeout(() => {
+      if (btn) btn.innerText = 'PROBAR PULSO REMOTO AL CELULAR';
+    }, 3000);
   }
 }
 

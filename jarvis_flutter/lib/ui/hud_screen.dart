@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
-import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../constants.dart';
 import '../core/api_service.dart';
 import '../core/device_relay_service.dart';
@@ -60,37 +59,44 @@ class _HudScreenState extends State<HudScreen> {
     _loadHistory();
 
     // Start background relay for PC remote control
-    _relay.startListening(onAction: (action) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: StarkConstants.panelBg,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-              side: const BorderSide(color: StarkConstants.primaryCyan),
-            ),
-            content: Row(
-              children: [
-                const Icon(Icons.sync_alt, color: StarkConstants.primaryCyan, size: 20),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'ORDEN REMOTA DESDE PC EJECUTADA: ${action['action']}',
-                    style: GoogleFonts.shareTechMono(color: Colors.white, fontSize: 11),
-                  ),
-                ),
-              ],
-            ),
+    _restartRelay();
+  }
+
+  void _restartRelay() {
+    _relay.stopListening();
+    _relay.startListening(onAction: _handleRemoteAction);
+  }
+
+  void _handleRemoteAction(Map<String, dynamic> action) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: StarkConstants.panelBg,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+            side: const BorderSide(color: StarkConstants.primaryCyan),
           ),
-        );
-        setState(() {
-          if (action['action'] == 'toggle_flashlight') {
-            _torchActive = action['enable'] == true;
-          }
-        });
-      }
-    });
+          content: Row(
+            children: [
+              const Icon(Icons.sync_alt, color: StarkConstants.primaryCyan, size: 20),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'ORDEN REMOTA DESDE PC EJECUTADA: ${action['action']}',
+                  style: GoogleFonts.shareTechMono(color: Colors.white, fontSize: 11),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+      setState(() {
+        if (action['action'] == 'toggle_flashlight') {
+          _torchActive = action['enable'] == true;
+        }
+      });
+    }
   }
 
   Future<void> _initSpeech() async {
@@ -247,20 +253,24 @@ class _HudScreenState extends State<HudScreen> {
         final videoId = action['video_id'] as String?;
         final title = action['title'] as String? ?? 'Pista de Audio';
         final watchUrl = action['watch_url'] as String?;
-        String? streamUrl = action['audio_stream_url'] as String?;
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               backgroundColor: StarkConstants.panelBg,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+                side: const BorderSide(color: StarkConstants.primaryCyan),
+              ),
               content: Row(
                 children: [
-                  const Icon(Icons.graphic_eq, color: StarkConstants.primaryCyan, size: 18),
-                  const SizedBox(width: 8),
+                  const Icon(Icons.smart_display, color: StarkConstants.starkRed, size: 20),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'SINTONIZANDO: $title',
-                      style: GoogleFonts.shareTechMono(color: StarkConstants.primaryCyan, fontSize: 11),
+                      'ABRIENDO EN YOUTUBE: $title',
+                      style: GoogleFonts.shareTechMono(color: StarkConstants.primaryCyan, fontSize: 11, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ],
@@ -269,28 +279,8 @@ class _HudScreenState extends State<HudScreen> {
           );
         }
 
-        try {
-          // Resolve audio stream on-device to bypass cloud datacenter bot-checks
-          if ((streamUrl == null || streamUrl.isEmpty) && videoId != null && videoId.isNotEmpty) {
-            final yt = YoutubeExplode();
-            final manifest = await yt.videos.streamsClient.getManifest(videoId);
-            final audioStream = manifest.audioOnly.withHighestBitrate();
-            streamUrl = audioStream.url.toString();
-            yt.close();
-          }
-
-          if (streamUrl != null && streamUrl.isNotEmpty) {
-            await _audioPlayer.setUrl(streamUrl);
-            await _audioPlayer.play();
-          } else if (watchUrl != null && watchUrl.isNotEmpty) {
-            await DeviceController.openUrl(watchUrl);
-          }
-        } catch (e) {
-          debugPrint('[AudioPlayer] Error al resolver o reproducir stream: $e');
-          if (watchUrl != null && watchUrl.isNotEmpty) {
-            await DeviceController.openUrl(watchUrl);
-          }
-        }
+        // Launch YouTube app natively and keep Jarvis in background
+        await DeviceController.openYouTube(videoId: videoId, watchUrl: watchUrl);
         break;
     }
   }
@@ -381,6 +371,7 @@ class _HudScreenState extends State<HudScreen> {
             onPressed: () async {
               await _api.setServerUrl(urlCtrl.text);
               await _api.setUserId(uidCtrl.text);
+              _restartRelay();
               if (ctx.mounted) {
                 Navigator.pop(ctx);
               }
@@ -398,40 +389,48 @@ class _HudScreenState extends State<HudScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: StarkConstants.bgDark,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // TOP STATUS BAR
-            _buildTopBar(),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) {
+          DeviceController.minimizeApp();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: StarkConstants.bgDark,
+        body: SafeArea(
+          child: Column(
+            children: [
+              // TOP STATUS BAR
+              _buildTopBar(),
 
-            // ARC REACTOR & TELEMETRY
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              child: GestureDetector(
-                onTap: _toggleListening,
-                child: ArcReactorWidget(
-                  isSpeaking: _isSpeaking,
-                  isListening: _isListening,
-                  size: 140,
+              // ARC REACTOR & TELEMETRY
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                child: GestureDetector(
+                  onTap: _toggleListening,
+                  child: ArcReactorWidget(
+                    isSpeaking: _isSpeaking,
+                    isListening: _isListening,
+                    size: 140,
+                  ),
                 ),
               ),
-            ),
 
-            // QUICK HARDWARE BUTTONS
-            _buildQuickActionsRow(),
+              // QUICK HARDWARE BUTTONS
+              _buildQuickActionsRow(),
 
-            const SizedBox(height: 6),
+              const SizedBox(height: 6),
 
-            // CHAT AREA WITH 120FPS SMOOTH SCROLLING
-            Expanded(
-              child: _buildChatArea(),
-            ),
+              // CHAT AREA WITH 120FPS SMOOTH SCROLLING
+              Expanded(
+                child: _buildChatArea(),
+              ),
 
-            // INPUT BAR
-            _buildInputBar(),
-          ],
+              // INPUT BAR
+              _buildInputBar(),
+            ],
+          ),
         ),
       ),
     );
@@ -493,9 +492,14 @@ class _HudScreenState extends State<HudScreen> {
               ),
               const SizedBox(width: 8),
               IconButton(
+                icon: const Icon(Icons.remove, color: StarkConstants.primaryCyan, size: 22),
+                onPressed: () => DeviceController.minimizeApp(),
+                tooltip: 'Minimizar en segundo plano',
+              ),
+              IconButton(
                 icon: const Icon(Icons.tune, color: StarkConstants.primaryCyan, size: 20),
                 onPressed: _openSettingsDialog,
-                tooltip: 'Ajustes de Servidor',
+                tooltip: 'Ajustes de Servidor / Terminal ID',
               ),
             ],
           ),

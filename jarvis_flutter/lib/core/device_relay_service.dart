@@ -119,10 +119,9 @@ class DeviceRelayService {
         break;
 
       case 'play_music':
+        final videoId = action['video_id'] as String?;
         final watchUrl = action['watch_url'] as String?;
-        if (watchUrl != null && watchUrl.isNotEmpty) {
-          await DeviceController.openUrl(watchUrl);
-        }
+        await DeviceController.openYouTube(videoId: videoId, watchUrl: watchUrl);
         break;
 
       default:

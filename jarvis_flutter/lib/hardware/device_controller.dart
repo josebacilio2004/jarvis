@@ -1,11 +1,23 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:torch_light/torch_light.dart';
 import 'package:android_intent_plus/android_intent.dart';
 import 'package:vibration/vibration.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 class DeviceController {
+  static const MethodChannel _appChannel = MethodChannel('com.starkindustries.jarvis/app_control');
+  static const int flagActivityNewTask = 0x10000000;
   static bool isTorchOn = false;
+
+  /// Minimize the app to the Android background without terminating
+  static Future<void> minimizeApp() async {
+    try {
+      await _appChannel.invokeMethod('minimizeApp');
+    } catch (e) {
+      debugPrint('[DeviceController] Error minimizing app: $e');
+    }
+  }
 
   /// Control the phone's physical flashlight / LED
   static Future<bool> toggleFlashlight(bool enable) async {
@@ -96,11 +108,69 @@ class DeviceController {
       final intent = AndroidIntent(
         action: 'android.intent.action.VIEW',
         data: url,
+        flags: const <int>[flagActivityNewTask],
       );
       await intent.launch();
       return true;
     } catch (e) {
       debugPrint('[DeviceController] Error opening URL: $e');
+      return false;
+    }
+  }
+
+  /// Launch song directly into YouTube App with fallback to browser
+  static Future<bool> openYouTube({String? videoId, String? watchUrl}) async {
+    try {
+      final vid = videoId?.trim();
+      final targetUrl = (vid != null && vid.isNotEmpty)
+          ? 'https://www.youtube.com/watch?v=$vid'
+          : (watchUrl != null && watchUrl.isNotEmpty ? watchUrl : null);
+
+      if (vid != null && vid.isNotEmpty) {
+        // 1. Native YouTube App intent via vnd.youtube scheme
+        try {
+          final appIntent = AndroidIntent(
+            action: 'android.intent.action.VIEW',
+            data: 'vnd.youtube:$vid',
+            flags: const <int>[flagActivityNewTask],
+          );
+          await appIntent.launch();
+          return true;
+        } catch (e) {
+          debugPrint('[DeviceController] vnd.youtube scheme failed: $e');
+        }
+
+        // 2. Direct intent with YouTube package name
+        try {
+          final pkgIntent = AndroidIntent(
+            action: 'android.intent.action.VIEW',
+            data: 'https://www.youtube.com/watch?v=$vid',
+            package: 'com.google.android.youtube',
+            flags: const <int>[flagActivityNewTask],
+          );
+          await pkgIntent.launch();
+          return true;
+        } catch (e) {
+          debugPrint('[DeviceController] com.google.android.youtube failed: $e');
+        }
+      }
+
+      // 3. Fallback to generic URL VIEW intent
+      if (targetUrl != null && targetUrl.isNotEmpty) {
+        final intent = AndroidIntent(
+          action: 'android.intent.action.VIEW',
+          data: targetUrl,
+          flags: const <int>[flagActivityNewTask],
+        );
+        await intent.launch();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('[DeviceController] Error opening YouTube: $e');
+      if (watchUrl != null && watchUrl.isNotEmpty) {
+        return await openUrl(watchUrl);
+      }
       return false;
     }
   }
