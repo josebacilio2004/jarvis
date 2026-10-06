@@ -35,3 +35,12 @@ android_app/.idea/
 .vscode/
 *.swp
 .DS_Store
+
+# Flutter Build Artifacts
+jarvis_flutter/build/
+jarvis_flutter/.dart_tool/
+jarvis_flutter/.flutter-plugins
+jarvis_flutter/.flutter-plugins-dependencies
+jarvis_flutter/android/.gradle/
+jarvis_flutter/android/local.properties
+static/downloads/*.apk

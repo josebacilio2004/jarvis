@@ -2,6 +2,7 @@ import os
 import re
 import json
 import time
+import queue
 from flask import Flask, render_template, request, jsonify, Response, stream_with_context, send_from_directory
 from flask_cors import CORS
 from google import genai
@@ -140,6 +141,24 @@ def check_auto_name_discovery(mensaje: str, user_id: str):
                 user_sessions[user_id]["user_name"] = discovered_name
             print(f"[Stark Identity] Nombre registrado para {user_id}: {discovered_name}")
 
+# === MULTI-DEVICE RELAY (PC <-> MOBILE) ===
+device_event_queues = {}
+
+def push_device_event(user_id: str, event_data: dict):
+    """Deliver a real-time command to any connected mobile phone of this user."""
+    if user_id in device_event_queues:
+        stale_queues = []
+        for q in device_event_queues[user_id]:
+            try:
+                q.put_nowait(event_data)
+            except queue.Full:
+                stale_queues.append(q)
+            except Exception:
+                stale_queues.append(q)
+        for sq in stale_queues:
+            if sq in device_event_queues[user_id]:
+                device_event_queues[user_id].remove(sq)
+
 def execute_embedded_actions(text: str, user_id: str):
     """Detect and execute [ACCION:TIPO:OBJETO] or [TIPO:OBJETO] tags embedded in Gemini response."""
     action_match = re.search(r'\[(?:ACCION:)?(\w+)(?::([^\]]+))?\]', text)
@@ -173,7 +192,7 @@ def execute_embedded_actions(text: str, user_id: str):
             parts = act_target.split(":")
             hour = 7
             minute = 0
-            label = "Alarma J.A.R.V.I.S."
+            label = "Alarma J.A.RV.I.S."
             if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
                 hour = int(parts[0])
                 minute = int(parts[1])
@@ -200,6 +219,15 @@ def execute_embedded_actions(text: str, user_id: str):
             else:
                 action_result = {"success": False, "message": "Captura remota de PC restringida a Administrador. En móvil, use Encendido + Bajar Volumen."}
                 
+        # Push action event to connected mobile devices for this user
+        if action_result:
+            push_device_event(user_id, {
+                "type": "remote_action",
+                "action": action_result,
+                "clean_text": clean_text,
+                "timestamp": time.time()
+            })
+
     return clean_text, action_result
 
 # === RUTAS HTTP ===
@@ -211,6 +239,44 @@ def index():
 def telemetry():
     """Live system telemetry for HUD gauges."""
     return jsonify(os_control.get_system_telemetry())
+
+@app.route('/device-stream')
+def device_stream():
+    """Server-Sent Events endpoint for mobile devices to receive real-time commands from PC."""
+    user_id = get_request_user_id()
+    q = queue.Queue(maxsize=50)
+    if user_id not in device_event_queues:
+        device_event_queues[user_id] = []
+    device_event_queues[user_id].append(q)
+
+    def event_generator():
+        yield f"data: {json.dumps({'type': 'connected', 'user_id': user_id})}\n\n"
+        try:
+            while True:
+                try:
+                    event = q.get(timeout=25)
+                    yield f"data: {json.dumps(event)}\n\n"
+                except queue.Empty:
+                    # Keep-alive comment
+                    yield ": ping\n\n"
+        except GeneratorExit:
+            pass
+        finally:
+            if user_id in device_event_queues and q in device_event_queues[user_id]:
+                device_event_queues[user_id].remove(q)
+
+    return Response(stream_with_context(event_generator()), mimetype='text/event-stream', headers={
+        'Cache-Control': 'no-cache',
+        'X-Accel-Buffering': 'no',
+        'Access-Control-Allow-Origin': '*'
+    })
+
+@app.route('/device-command', methods=['POST'])
+def send_device_command():
+    user_id = get_request_user_id()
+    data = request.json or {}
+    push_device_event(user_id, data)
+    return jsonify({"status": "dispatched", "user_id": user_id, "data": data})
 
 @app.route('/history')
 def history():
