@@ -177,22 +177,27 @@ class DeviceController {
     }
   }
 
+  /// Request call permission from Android OS
+  static Future<bool> requestCallPermission() async {
+    try {
+      final res = await _appChannel.invokeMethod<bool>('requestCallPermission');
+      return res ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Initiate and execute phone call immediately
   static Future<bool> makeCall(String target) async {
     try {
       final cleanDigits = target.replaceAll(RegExp(r'[^0-9+*#]'), '');
       if (cleanDigits.isNotEmpty) {
-        // 1. Direct call execution via ACTION_CALL
+        // 1. Direct native call with automatic runtime permission prompt
         try {
-          final callIntent = AndroidIntent(
-            action: 'android.intent.action.CALL',
-            data: 'tel:$cleanDigits',
-            flags: const <int>[flagActivityNewTask],
-          );
-          await callIntent.launch();
-          return true;
+          final res = await _appChannel.invokeMethod<bool>('makeDirectCall', {'number': cleanDigits});
+          if (res == true) return true;
         } catch (e) {
-          debugPrint('[DeviceController] ACTION_CALL error: $e, falling back to DIAL');
+          debugPrint('[DeviceController] Native makeDirectCall error: $e');
         }
       }
 

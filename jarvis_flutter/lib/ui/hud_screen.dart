@@ -67,6 +67,7 @@ class _HudScreenState extends State<HudScreen> {
     _initSpeech();
     _initAudio();
     _loadHistory();
+    DeviceController.requestCallPermission();
 
     // Start background relay for PC remote control
     _restartRelay();
@@ -132,10 +133,8 @@ class _HudScreenState extends State<HudScreen> {
         setState(() {
           _isSpeaking = speaking;
         });
-        // Audio Ducking: smoothly lower background music while Jarvis speaks, restore when finished
-        if (_isMusicPlaying) {
-          _musicPlayer.setVolume(speaking ? 0.25 : 1.0);
-        }
+        // Audio Ducking: lower music to 25% while speaking, restore to 100% when finished
+        _musicPlayer.setVolume(speaking ? 0.25 : 1.0);
       }
     });
 
@@ -314,14 +313,22 @@ class _HudScreenState extends State<HudScreen> {
           if (videoId != null && videoId.isNotEmpty) {
             final yt = YoutubeExplode();
             final manifest = await yt.videos.streamsClient.getManifest(videoId);
-            final audioStream = manifest.audioOnly.withHighestBitrate();
+            final mp4Streams = manifest.audioOnly.where((s) => s.container.name.toLowerCase() == 'mp4');
+            final audioStream = mp4Streams.isNotEmpty
+                ? mp4Streams.withHighestBitrate()
+                : manifest.audioOnly.withHighestBitrate();
             directStreamUrl = audioStream.url.toString();
             yt.close();
           }
 
           if (directStreamUrl != null && directStreamUrl.isNotEmpty) {
-            await _musicPlayer.setUrl(directStreamUrl);
-            await _musicPlayer.setVolume(1.0);
+            await _musicPlayer.setUrl(
+              directStreamUrl,
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+              },
+            );
+            await _musicPlayer.setVolume(_isSpeaking ? 0.25 : 1.0);
             await _musicPlayer.play();
           } else if (watchUrl != null && watchUrl.isNotEmpty) {
             await _musicPlayer.setUrl(watchUrl);
