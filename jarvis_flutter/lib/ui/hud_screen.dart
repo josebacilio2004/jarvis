@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../constants.dart';
 import '../core/api_service.dart';
 import '../core/device_relay_service.dart';
@@ -243,33 +244,52 @@ class _HudScreenState extends State<HudScreen> {
         break;
 
       case 'play_music':
-        final streamUrl = action['audio_stream_url'] as String?;
+        final videoId = action['video_id'] as String?;
         final title = action['title'] as String? ?? 'Pista de Audio';
         final watchUrl = action['watch_url'] as String?;
+        String? streamUrl = action['audio_stream_url'] as String?;
 
-        if (streamUrl != null && streamUrl.isNotEmpty) {
-          try {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: StarkConstants.panelBg,
+              content: Row(
+                children: [
+                  const Icon(Icons.graphic_eq, color: StarkConstants.primaryCyan, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'SINTONIZANDO: $title',
+                      style: GoogleFonts.shareTechMono(color: StarkConstants.primaryCyan, fontSize: 11),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        try {
+          // Resolve audio stream on-device to bypass cloud datacenter bot-checks
+          if ((streamUrl == null || streamUrl.isEmpty) && videoId != null && videoId.isNotEmpty) {
+            final yt = YoutubeExplode();
+            final manifest = await yt.videos.streamsClient.getManifest(videoId);
+            final audioStream = manifest.audioOnly.withHighestBitrate();
+            streamUrl = audioStream.url.toString();
+            yt.close();
+          }
+
+          if (streamUrl != null && streamUrl.isNotEmpty) {
             await _audioPlayer.setUrl(streamUrl);
             await _audioPlayer.play();
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  backgroundColor: StarkConstants.panelBg,
-                  content: Text(
-                    'SINTONIZANDO: $title',
-                    style: GoogleFonts.shareTechMono(color: StarkConstants.primaryCyan, fontSize: 11),
-                  ),
-                ),
-              );
-            }
-          } catch (e) {
-            debugPrint('[AudioPlayer] Fallo al reproducir stream directo: $e');
-            if (watchUrl != null && watchUrl.isNotEmpty) {
-              await DeviceController.openUrl(watchUrl);
-            }
+          } else if (watchUrl != null && watchUrl.isNotEmpty) {
+            await DeviceController.openUrl(watchUrl);
           }
-        } else if (watchUrl != null && watchUrl.isNotEmpty) {
-          await DeviceController.openUrl(watchUrl);
+        } catch (e) {
+          debugPrint('[AudioPlayer] Error al resolver o reproducir stream: $e');
+          if (watchUrl != null && watchUrl.isNotEmpty) {
+            await DeviceController.openUrl(watchUrl);
+          }
         }
         break;
     }

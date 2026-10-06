@@ -446,7 +446,12 @@ def chat_stream():
                 err_text = f"Interferencia detectada en el flujo neuronal: {str(e2)[:60]}"
                 yield f"data: {json.dumps({'chunk': err_text, 'done': True})}\n\n"
 
-    return Response(stream_with_context(stream_generator()), mimetype='text/event-stream')
+    return Response(stream_with_context(stream_generator()), mimetype='text/event-stream', headers={
+        'Cache-Control': 'no-cache',
+        'X-Accel-Buffering': 'no',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*'
+    })
 
 @app.route('/download/jarvis.apk')
 def download_apk():

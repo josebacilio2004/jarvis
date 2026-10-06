@@ -112,39 +112,36 @@ def resolve_song_audio_stream(query: str) -> dict:
     """Extract direct audio stream URL with yt-dlp using mobile client emulation to bypass bot checks."""
     clean_query = query.strip()
     
-    # 1. Try yt-dlp with mobile client spoofing (bypasses datacenter IP blocks on Render/AWS)
+    # 1. Fast metadata extraction (extract_flat bypasses all datacenter bot-checks and responds in < 0.5s)
     try:
         import yt_dlp
         ydl_opts = {
-            'format': 'bestaudio/best',
-            'noplaylist': True,
+            'extract_flat': True,
             'quiet': True,
             'no_warnings': True,
             'default_search': 'ytsearch1',
-            'extractor_args': {
-                'youtube': {
-                    'player_client': ['mweb', 'ios', 'android', 'web'],
-                }
-            },
-            'socket_timeout': 10,
+            'socket_timeout': 5,
         }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             res = ydl.extract_info(f"ytsearch1:{clean_query}", download=False)
             if 'entries' in res and res['entries']:
                 entry = res['entries'][0]
                 vid = entry.get("id")
+                title = entry.get("title", clean_query)
+                watch_url = entry.get("url") or (f"https://www.youtube.com/watch?v={vid}" if vid else None)
+                thumb = f"https://img.youtube.com/vi/{vid}/hqdefault.jpg" if vid else None
                 return {
                     "success": True,
-                    "title": entry.get("title", clean_query),
+                    "title": title,
                     "video_id": vid,
-                    "audio_stream_url": entry.get("url"),
-                    "watch_url": entry.get("webpage_url") or (f"https://www.youtube.com/watch?v={vid}" if vid else None),
-                    "thumbnail": entry.get("thumbnail") or (f"https://img.youtube.com/vi/{vid}/hqdefault.jpg" if vid else None),
+                    "audio_stream_url": None,
+                    "watch_url": watch_url,
+                    "thumbnail": thumb,
                     "duration": entry.get("duration"),
                     "query": clean_query
                 }
     except Exception as e:
-        print(f"[yt-dlp Stream Error - Falling back to web extractor]: {e}")
+        print(f"[Fast Flat Search Error]: {e}")
 
     # 2. Fallback: Search YouTube HTML directly to extract Video ID and title
     import urllib.parse

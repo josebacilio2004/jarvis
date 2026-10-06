@@ -13,6 +13,7 @@ os.makedirs(AUDIO_DIR, exist_ok=True)
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "")
 DEFAULT_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "onwK4e9ZLuTAKqWW03F9")
 EDGE_TTS_VOICE = "es-MX-JorgeNeural"  # Authentic Mexican Spanish dub style
+ELEVENLABS_DISABLED = False
 
 def get_text_hash(text: str, extra: str = "") -> str:
     combined = f"{text.strip()}_{extra}"
@@ -26,6 +27,7 @@ def generate_tts_audio(text: str, custom_voice_id: str = None, pitch: str = "-4H
     3. Fallback to Edge-TTS Neural (es-MX-JorgeNeural with pitch/rate modulation).
     Returns relative web path to MP3 (e.g. '/static/audio/speech_xxx.mp3').
     """
+    global ELEVENLABS_DISABLED
     clean_text = (
         text.replace("**", "")
         .replace("*", "")
@@ -45,8 +47,8 @@ def generate_tts_audio(text: str, custom_voice_id: str = None, pitch: str = "-4H
     if os.path.exists(filepath) and os.path.getsize(filepath) > 500:
         return f"/static/audio/{filename}"
 
-    # Try ElevenLabs first if key exists
-    if ELEVENLABS_API_KEY and voice_id:
+    # Try ElevenLabs first if key exists and not disabled
+    if ELEVENLABS_API_KEY and voice_id and not ELEVENLABS_DISABLED:
         try:
             url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
             headers = {
@@ -65,14 +67,18 @@ def generate_tts_audio(text: str, custom_voice_id: str = None, pitch: str = "-4H
                     "use_speaker_boost": True
                 }
             }
-            resp = requests.post(url, headers=headers, json=payload, timeout=8)
+            resp = requests.post(url, headers=headers, json=payload, timeout=4)
             if resp.status_code == 200 and len(resp.content) > 1000:
                 with open(filepath, "wb") as f:
                     f.write(resp.content)
                 print(f"[TTS] Generated with ElevenLabs (Voice: {voice_id}): {filename}")
                 return f"/static/audio/{filename}"
             else:
-                print(f"[TTS] ElevenLabs returned {resp.status_code}, falling back to Edge-TTS.")
+                if resp.status_code == 401:
+                    ELEVENLABS_DISABLED = True
+                    print("[TTS] ElevenLabs 401 (Clave no autorizada). Desactivado de inmediato: usando Edge-TTS Neural ultrarrápido.")
+                else:
+                    print(f"[TTS] ElevenLabs returned {resp.status_code}, falling back to Edge-TTS.")
         except Exception as e:
             print(f"[TTS] ElevenLabs error: {e}, falling back to Edge-TTS.")
 

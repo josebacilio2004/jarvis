@@ -43,6 +43,7 @@ dependencies:
   google_fonts: ^8.2.1
   vibration: ^3.2.1
   wakelock_plus: ^1.7.0
+  youtube_explode_dart: ^3.1.0
 
 dev_dependencies:
   flutter_test:
