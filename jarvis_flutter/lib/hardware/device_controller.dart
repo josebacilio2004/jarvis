@@ -235,4 +235,52 @@ class DeviceController {
       }
     } catch (_) {}
   }
+
+  /// Launch Android system Camera app
+  static Future<bool> openCamera() async {
+    try {
+      final res = await _appChannel.invokeMethod<bool>('openCamera');
+      return res ?? false;
+    } catch (e) {
+      debugPrint('[DeviceController] Error opening camera: $e');
+      return false;
+    }
+  }
+
+  /// Get phone battery level and charging state
+  static Future<Map<String, dynamic>> getBatteryStatus() async {
+    try {
+      final res = await _appChannel.invokeMapMethod<String, dynamic>('getBatteryStatus');
+      return res ?? {'level': 100, 'isCharging': false};
+    } catch (e) {
+      debugPrint('[DeviceController] Error getting battery: $e');
+      return {'level': 100, 'isCharging': false};
+    }
+  }
+
+  /// Display persistent Stark status / media notification in Android shade and lock screen
+  static Future<void> showNotification({
+    required String title,
+    required String content,
+    bool isPlaying = false,
+  }) async {
+    try {
+      await _appChannel.invokeMethod('showNotification', {
+        'title': title,
+        'content': content,
+        'isPlaying': isPlaying,
+      });
+    } catch (e) {
+      debugPrint('[DeviceController] Error showing notification: $e');
+    }
+  }
+
+  /// Cancel status notification
+  static Future<void> cancelNotification() async {
+    try {
+      await _appChannel.invokeMethod('cancelNotification');
+    } catch (e) {
+      debugPrint('[DeviceController] Error canceling notification: $e');
+    }
+  }
 }

@@ -129,4 +129,18 @@ class ApiService {
     } catch (_) {}
     return [];
   }
+
+  /// Send live mobile telemetry to server for cross-device PC HUD sync
+  Future<bool> sendDeviceTelemetry(Map<String, dynamic> telemetryData) async {
+    try {
+      final res = await http.post(
+        Uri.parse('$_serverUrl/device-telemetry'),
+        headers: _headers,
+        body: jsonEncode(telemetryData),
+      );
+      return res.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
 }

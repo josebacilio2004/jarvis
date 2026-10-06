@@ -58,6 +58,16 @@ CAPACIDADES MULTIMEDIA Y PROTOCOLOS DE ACCIÓN:
 [ACCION:ABRIR:nombre_app]
 - Si te pide buscar en google o youtube:
 [ACCION:BUSCAR:termino_de_busqueda]
+- Si te pide encender o abrir la cámara ("abre la cámara", "activa la cámara", "tomar foto"):
+[ACCION:CAMARA]
+- Si te pide pausar la música ("pausa", "detén la música", "silencio"):
+[ACCION:PAUSAR_MUSICA]
+- Si te pide reanudar la música ("continúa", "reanuda", "play"):
+[ACCION:REANUDAR_MUSICA]
+- Si te pide detener la música por completo ("apaga la música", "detén la canción"):
+[ACCION:DETENER_MUSICA]
+- Si te pide subir o bajar el volumen ("sube el volumen", "baja el volumen", "más volumen"):
+[ACCION:VOLUMEN:SUBIR] o [ACCION:VOLUMEN:BAJAR]
 - Si te pide captura de pantalla:
 [ACCION:CAPTURA]
 
@@ -162,7 +172,7 @@ def push_device_event(user_id: str, event_data: dict):
 def execute_embedded_actions(text: str, user_id: str):
     """Detect and execute [ACCION:TIPO:OBJETO] or [TIPO:OBJETO] tags embedded in Gemini response."""
     action_match = re.search(r'\[(?:ACCION:)?(\w+)(?::([^\]]+))?\]', text)
-    clean_text = re.sub(r'\[?(?:ACCION:)?(?:REPRODUCIR|PLAY|CREAR_TAREA|TAREA|COMPLETAR_TAREA|TERMINAR_TAREA|LLAMAR|CALL|ABRIR|BUSCAR|CAPTURA|ALARMA|ALARM|TEMPORIZADOR|TIMER|LINTERNA|FLASHLIGHT|TORCH|MAPAS|MAPS|UBICACION|RUTA):?[^\]]*\]?', '', text).strip()
+    clean_text = re.sub(r'\[?(?:ACCION:)?(?:REPRODUCIR|PLAY|CREAR_TAREA|TAREA|COMPLETAR_TAREA|TERMINAR_TAREA|LLAMAR|CALL|ABRIR|BUSCAR|CAPTURA|ALARMA|ALARM|TEMPORIZADOR|TIMER|LINTERNA|FLASHLIGHT|TORCH|MAPAS|MAPS|UBICACION|RUTA|CAMARA|CAMERA|PAUSAR_MUSICA|REANUDAR_MUSICA|DETENER_MUSICA|VOLUMEN|VOLUME):?[^\]]*\]?', '', text).strip()
     action_result = None
     if action_match:
         act_type = action_match.group(1).upper()
@@ -173,6 +183,17 @@ def execute_embedded_actions(text: str, user_id: str):
 
         if act_type in ["REPRODUCIR", "PLAY"]:
             action_result = os_control.play_music(act_target)
+        elif act_type in ["PAUSAR_MUSICA", "PAUSE_MUSIC"]:
+            action_result = {"action": "pause_music", "message": "Pausando reproducción de audio, Señor."}
+        elif act_type in ["REANUDAR_MUSICA", "RESUME_MUSIC"]:
+            action_result = {"action": "resume_music", "message": "Reanudando reproducción, Señor."}
+        elif act_type in ["DETENER_MUSICA", "STOP_MUSIC"]:
+            action_result = {"action": "stop_music", "message": "Pista de audio detenida, Señor."}
+        elif act_type in ["VOLUMEN", "VOLUME"]:
+            direction = "up" if any(w in act_target.upper() for w in ["SUB", "UP", "MAS", "MÁS"]) else "down"
+            action_result = {"action": "volume_control", "direction": direction, "message": f"Ajustando volumen hacia {'arriba' if direction == 'up' else 'abajo'}, Señor."}
+        elif act_type in ["CAMARA", "CAMERA", "ENCENDER_CAMARA", "ABRIR_CAMARA"]:
+            action_result = {"action": "open_camera", "message": "Iniciando sensores ópticos y cámara del dispositivo, Señor."}
         elif act_type in ["CREAR_TAREA", "TAREA"]:
             task_id = db.add_task(user_id, act_target)
             action_result = {"action": "create_task", "id": task_id, "title": act_target, "tasks": db.get_tasks(user_id)}
@@ -235,10 +256,42 @@ def execute_embedded_actions(text: str, user_id: str):
 def index():
     return render_template('index.html')
 
+mobile_device_telemetry = {}
+
+@app.route('/device-telemetry', methods=['POST'])
+def receive_device_telemetry():
+    """Receives live battery, flashlight, and media status from the mobile device."""
+    user_id = get_request_user_id()
+    data = request.json or {}
+    mobile_device_telemetry[user_id] = {
+        "battery": data.get("battery", 100),
+        "charging": data.get("charging", False),
+        "torch": data.get("torch", False),
+        "music": data.get("music"),
+        "is_playing": data.get("is_playing", False),
+        "last_seen": time.time(),
+        "online": True
+    }
+    return jsonify({"status": "ok", "user_id": user_id})
+
 @app.route('/telemetry')
 def telemetry():
-    """Live system telemetry for HUD gauges."""
-    return jsonify(os_control.get_system_telemetry())
+    """Live system telemetry for HUD gauges, merged with real-time mobile stats."""
+    user_id = get_request_user_id()
+    base_data = os_control.get_system_telemetry()
+    m_data = mobile_device_telemetry.get(user_id)
+    if m_data and (time.time() - m_data.get("last_seen", 0) < 60):
+        base_data["mobile"] = m_data
+    else:
+        base_data["mobile"] = {
+            "battery": None,
+            "charging": False,
+            "torch": False,
+            "music": None,
+            "is_playing": False,
+            "online": False
+        }
+    return jsonify(base_data)
 
 @app.route('/device-stream')
 def device_stream():
@@ -410,7 +463,7 @@ def chat_stream():
                 if chunk.text:
                     full_text += chunk.text
                     # Strip action tags from display stream
-                    display_chunk = re.sub(r'\[?(?:ACCION:)?(?:REPRODUCIR|CREAR_TAREA|COMPLETAR_TAREA|LLAMAR|ABRIR|BUSCAR|CAPTURA):?[^\]]*\]?', '', chunk.text)
+                    display_chunk = re.sub(r'\[(?:ACCION:)?\w+(?::[^\]]*)?\]', '', chunk.text)
                     if display_chunk:
                         yield f"data: {json.dumps({'chunk': display_chunk})}\n\n"
 
@@ -435,7 +488,7 @@ def chat_stream():
                 for chunk in stream:
                     if chunk.text:
                         full_text += chunk.text
-                        display_chunk = re.sub(r'\[?(?:ACCION:)?(?:REPRODUCIR|CREAR_TAREA|COMPLETAR_TAREA|LLAMAR|ABRIR|BUSCAR|CAPTURA):?[^\]]*\]?', '', chunk.text)
+                        display_chunk = re.sub(r'\[(?:ACCION:)?\w+(?::[^\]]*)?\]', '', chunk.text)
                         if display_chunk:
                             yield f"data: {json.dumps({'chunk': display_chunk})}\n\n"
                 clean_reply, action_result = execute_embedded_actions(full_text, user_id)

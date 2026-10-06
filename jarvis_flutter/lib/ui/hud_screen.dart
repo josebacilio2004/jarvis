@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:just_audio/just_audio.dart';
@@ -57,6 +58,8 @@ class _HudScreenState extends State<HudScreen> {
   bool _isMusicPlaying = false;
   String? _lastActionKey;
   DateTime? _lastActionTime;
+  bool _handsFree = false;
+  Timer? _telemetryTimer;
 
   @override
   void initState() {
@@ -73,6 +76,32 @@ class _HudScreenState extends State<HudScreen> {
 
     // Start background relay for PC remote control
     _restartRelay();
+    _startTelemetrySync();
+
+    DeviceController.showNotification(
+      title: 'J.A.R.V.I.S. NEURAL CORE v1.1',
+      content: 'Sistemas activos • En línea',
+      isPlaying: false,
+    );
+  }
+
+  void _startTelemetrySync() {
+    _telemetryTimer?.cancel();
+    _telemetryTimer = Timer.periodic(const Duration(seconds: 15), (_) => _syncTelemetry());
+    _syncTelemetry();
+  }
+
+  Future<void> _syncTelemetry() async {
+    try {
+      final batt = await DeviceController.getBatteryStatus();
+      await _api.sendDeviceTelemetry({
+        'battery': batt['level'],
+        'charging': batt['isCharging'],
+        'torch': _torchActive,
+        'music': _currentSongTitle,
+        'is_playing': _isMusicPlaying,
+      });
+    } catch (_) {}
   }
 
   void _restartRelay() {
@@ -117,14 +146,82 @@ class _HudScreenState extends State<HudScreen> {
   Future<void> _initSpeech() async {
     try {
       _speechAvailable = await _speech.initialize(
-        onError: (err) => setState(() => _isListening = false),
+        onError: (err) {
+          if (mounted) setState(() => _isListening = false);
+          if (_handsFree && mounted) {
+            Future.delayed(const Duration(seconds: 1), () {
+              if (mounted && _handsFree && !_isSpeaking && !_isProcessing) {
+                _startContinuousListening();
+              }
+            });
+          }
+        },
         onStatus: (status) {
           if (status == 'done' || status == 'notListening') {
-            setState(() => _isListening = false);
+            if (mounted) setState(() => _isListening = false);
+            if (_handsFree && mounted) {
+              Future.delayed(const Duration(milliseconds: 500), () {
+                if (mounted && _handsFree && !_isSpeaking && !_isProcessing) {
+                  _startContinuousListening();
+                }
+              });
+            }
           }
         },
       );
       setState(() {});
+    } catch (_) {}
+  }
+
+  void _toggleHandsFree() {
+    setState(() {
+      _handsFree = !_handsFree;
+    });
+    if (_handsFree) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: StarkConstants.panelBg,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+            side: const BorderSide(color: StarkConstants.starkGold),
+          ),
+          content: Text(
+            'AUTO-ESCUCHA ACTIVA: Diga "Hey Jarvis" o "Jarvis" para dar órdenes',
+            style: GoogleFonts.shareTechMono(color: StarkConstants.starkGold, fontSize: 11),
+          ),
+        ),
+      );
+      _startContinuousListening();
+    } else {
+      _speech.stop();
+      setState(() => _isListening = false);
+    }
+  }
+
+  void _startContinuousListening() {
+    if (!_speechAvailable || !_handsFree || _isSpeaking || _isProcessing) return;
+    try {
+      _speech.listen(
+        listenOptions: stt.SpeechListenOptions(
+          cancelOnError: false,
+          partialResults: true,
+          listenMode: stt.ListenMode.dictation,
+        ),
+        onResult: (result) {
+          final words = result.recognizedWords.trim();
+          if (words.isNotEmpty && result.finalResult) {
+            final lower = words.toLowerCase();
+            if (lower.contains('jarvis') || lower.contains('oye jarvis') || lower.contains('hey jarvis')) {
+              final clean = words.replaceAll(RegExp(r'\b(hey|oye|ok)?\s*jarvis\b[,:]?', caseSensitive: false), '').trim();
+              if (clean.isNotEmpty) {
+                _sendMessage(clean);
+              }
+            }
+          }
+        },
+      );
+      if (mounted) setState(() => _isListening = true);
     } catch (_) {}
   }
 
@@ -148,15 +245,31 @@ class _HudScreenState extends State<HudScreen> {
               _musicPlayer.processingState != ProcessingState.completed) {
             _musicPlayer.play();
           }
+          if (_handsFree && mounted) {
+            Future.delayed(const Duration(milliseconds: 600), () {
+              if (mounted && _handsFree && !_isSpeaking && !_isProcessing) {
+                _startContinuousListening();
+              }
+            });
+          }
         }
       }
     });
 
     _musicPlayer.playerStateStream.listen((state) {
       if (mounted) {
+        final playing = state.playing && state.processingState != ProcessingState.completed;
         setState(() {
-          _isMusicPlaying = state.playing && state.processingState != ProcessingState.completed;
+          _isMusicPlaying = playing;
         });
+        if (_currentSongTitle != null) {
+          DeviceController.showNotification(
+            title: playing ? 'J.A.R.V.I.S. • REPRODUCIENDO' : 'J.A.R.V.I.S. • EN ESPERA',
+            content: _currentSongTitle!,
+            isPlaying: playing,
+          );
+        }
+        _syncTelemetry();
       }
     });
 
@@ -186,6 +299,8 @@ class _HudScreenState extends State<HudScreen> {
 
   @override
   void dispose() {
+    _telemetryTimer?.cancel();
+    DeviceController.cancelNotification();
     _textController.dispose();
     _scrollController.dispose();
     _voicePlayer.dispose();
@@ -276,10 +391,44 @@ class _HudScreenState extends State<HudScreen> {
     _lastActionTime = now;
 
     switch (type) {
+      case 'open_camera':
+        await DeviceController.openCamera();
+        break;
+
+      case 'pause_music':
+        await _musicPlayer.pause();
+        break;
+
+      case 'resume_music':
+        await _musicPlayer.play();
+        break;
+
+      case 'stop_music':
+        await _musicPlayer.stop();
+        setState(() {
+          _isMusicPlaying = false;
+          _currentSongTitle = null;
+        });
+        DeviceController.showNotification(
+          title: 'J.A.R.V.I.S. NEURAL CORE',
+          content: 'Pista de audio detenida',
+          isPlaying: false,
+        );
+        _syncTelemetry();
+        break;
+
+      case 'volume_control':
+        final dir = action['direction'] as String? ?? 'up';
+        final curr = _musicPlayer.volume;
+        final next = dir == 'up' ? (curr + 0.25).clamp(0.0, 1.0) : (curr - 0.25).clamp(0.0, 1.0);
+        await _musicPlayer.setVolume(next);
+        break;
+
       case 'toggle_flashlight':
         final enable = action['enable'] == true;
         await DeviceController.toggleFlashlight(enable);
         setState(() => _torchActive = enable);
+        _syncTelemetry();
         break;
 
       case 'set_alarm':
@@ -532,7 +681,7 @@ class _HudScreenState extends State<HudScreen> {
                 child: GestureDetector(
                   onTap: _toggleListening,
                   child: ArcReactorWidget(
-                    isSpeaking: _isSpeaking,
+                    isSpeaking: _isSpeaking || _isMusicPlaying,
                     isListening: _isListening,
                     size: 140,
                   ),
@@ -583,22 +732,70 @@ class _HudScreenState extends State<HudScreen> {
                 ),
               ),
               const SizedBox(width: 8),
-              Text(
-                'J.A.R.V.I.S. OS',
-                style: GoogleFonts.orbitron(
-                  color: StarkConstants.primaryCyan,
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.5,
-                ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'J.A.R.V.I.S. OS',
+                    style: GoogleFonts.orbitron(
+                      color: StarkConstants.primaryCyan,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                  Text(
+                    'MARK VII • v1.1.0',
+                    style: GoogleFonts.shareTechMono(
+                      color: StarkConstants.textDim,
+                      fontSize: 8,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
           Row(
             children: [
+              // Hands-Free Auto-Listen Badge
+              GestureDetector(
+                onTap: _toggleHandsFree,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: _handsFree
+                        ? StarkConstants.starkGold.withValues(alpha: 0.15)
+                        : Colors.white.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(
+                      color: _handsFree ? StarkConstants.starkGold : Colors.white24,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _handsFree ? Icons.mic : Icons.mic_off,
+                        color: _handsFree ? StarkConstants.starkGold : Colors.white54,
+                        size: 11,
+                      ),
+                      const SizedBox(width: 3),
+                      Text(
+                        _handsFree ? 'VOZ ON' : 'VOZ OFF',
+                        style: GoogleFonts.shareTechMono(
+                          color: _handsFree ? StarkConstants.starkGold : Colors.white54,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
               // PC Sync Relay Badge
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
                 decoration: BoxDecoration(
                   color: StarkConstants.primaryCyan.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(4),
@@ -607,22 +804,22 @@ class _HudScreenState extends State<HudScreen> {
                 child: Row(
                   children: [
                     const Icon(Icons.sync, color: StarkConstants.primaryCyan, size: 10),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: 3),
                     Text(
-                      'PC RELAY ON',
+                      'PC RELAY',
                       style: GoogleFonts.shareTechMono(color: StarkConstants.primaryCyan, fontSize: 9, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 4),
               IconButton(
-                icon: const Icon(Icons.remove, color: StarkConstants.primaryCyan, size: 22),
+                icon: const Icon(Icons.remove, color: StarkConstants.primaryCyan, size: 20),
                 onPressed: () => DeviceController.minimizeApp(),
                 tooltip: 'Minimizar en segundo plano',
               ),
               IconButton(
-                icon: const Icon(Icons.tune, color: StarkConstants.primaryCyan, size: 20),
+                icon: const Icon(Icons.tune, color: StarkConstants.primaryCyan, size: 18),
                 onPressed: _openSettingsDialog,
                 tooltip: 'Ajustes de Servidor / Terminal ID',
               ),
@@ -635,7 +832,7 @@ class _HudScreenState extends State<HudScreen> {
 
   Widget _buildQuickActionsRow() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
@@ -647,7 +844,14 @@ class _HudScreenState extends State<HudScreen> {
               final newState = !_torchActive;
               await DeviceController.toggleFlashlight(newState);
               setState(() => _torchActive = newState);
+              _syncTelemetry();
             },
+          ),
+          _quickBtn(
+            icon: Icons.camera_alt,
+            label: 'Cámara',
+            color: StarkConstants.primaryCyan,
+            onTap: () => DeviceController.openCamera(),
           ),
           _quickBtn(
             icon: Icons.alarm,
@@ -742,6 +946,8 @@ class _HudScreenState extends State<HudScreen> {
               ],
             ),
           ),
+          const SizedBox(width: 6),
+          EqualizerBarsWidget(isPlaying: _isMusicPlaying),
           IconButton(
             icon: Icon(
               _isMusicPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
@@ -897,6 +1103,85 @@ class _HudScreenState extends State<HudScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class EqualizerBarsWidget extends StatefulWidget {
+  final bool isPlaying;
+  const EqualizerBarsWidget({super.key, required this.isPlaying});
+
+  @override
+  State<EqualizerBarsWidget> createState() => _EqualizerBarsWidgetState();
+}
+
+class _EqualizerBarsWidgetState extends State<EqualizerBarsWidget> with SingleTickerProviderStateMixin {
+  late AnimationController _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _anim = AnimationController(vsync: this, duration: const Duration(milliseconds: 650))..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _anim.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.isPlaying) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: List.generate(
+          5,
+          (i) => Container(
+            margin: const EdgeInsets.symmetric(horizontal: 1.5),
+            width: 3,
+            height: 4,
+            decoration: BoxDecoration(
+              color: StarkConstants.primaryCyan.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(1.5),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return AnimatedBuilder(
+      animation: _anim,
+      builder: (context, child) {
+        final val = _anim.value;
+        final heights = [
+          5.0 + 9.0 * math.sin(val * math.pi).abs(),
+          14.0 - 7.0 * math.cos(val * math.pi).abs(),
+          7.0 + 11.0 * math.sin((val + 0.3) * math.pi).abs(),
+          15.0 - 9.0 * math.sin((val + 0.6) * math.pi).abs(),
+          6.0 + 8.0 * math.cos((val + 0.2) * math.pi).abs(),
+        ];
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: List.generate(
+            5,
+            (i) => Container(
+              margin: const EdgeInsets.symmetric(horizontal: 1.5),
+              width: 3,
+              height: heights[i].clamp(3.0, 18.0),
+              decoration: BoxDecoration(
+                color: StarkConstants.primaryCyan,
+                borderRadius: BorderRadius.circular(1.5),
+                boxShadow: const [
+                  BoxShadow(color: StarkConstants.primaryCyan, blurRadius: 4),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
