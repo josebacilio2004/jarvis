@@ -90,6 +90,21 @@ class DeviceController {
     }
   }
 
+  /// Open external URL (e.g. YouTube watch URL or browser)
+  static Future<bool> openUrl(String url) async {
+    try {
+      final intent = AndroidIntent(
+        action: 'android.intent.action.VIEW',
+        data: url,
+      );
+      await intent.launch();
+      return true;
+    } catch (e) {
+      debugPrint('[DeviceController] Error opening URL: $e');
+      return false;
+    }
+  }
+
   /// Initiate phone call or dialer
   static Future<bool> makeCall(String target) async {
     try {

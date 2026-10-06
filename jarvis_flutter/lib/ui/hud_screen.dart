@@ -241,6 +241,37 @@ class _HudScreenState extends State<HudScreen> {
         final target = action['target'] as String? ?? '';
         if (target.isNotEmpty) await DeviceController.makeCall(target);
         break;
+
+      case 'play_music':
+        final streamUrl = action['audio_stream_url'] as String?;
+        final title = action['title'] as String? ?? 'Pista de Audio';
+        final watchUrl = action['watch_url'] as String?;
+
+        if (streamUrl != null && streamUrl.isNotEmpty) {
+          try {
+            await _audioPlayer.setUrl(streamUrl);
+            await _audioPlayer.play();
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  backgroundColor: StarkConstants.panelBg,
+                  content: Text(
+                    'SINTONIZANDO: $title',
+                    style: GoogleFonts.shareTechMono(color: StarkConstants.primaryCyan, fontSize: 11),
+                  ),
+                ),
+              );
+            }
+          } catch (e) {
+            debugPrint('[AudioPlayer] Fallo al reproducir stream directo: $e');
+            if (watchUrl != null && watchUrl.isNotEmpty) {
+              await DeviceController.openUrl(watchUrl);
+            }
+          }
+        } else if (watchUrl != null && watchUrl.isNotEmpty) {
+          await DeviceController.openUrl(watchUrl);
+        }
+        break;
     }
   }
 

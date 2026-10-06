@@ -123,8 +123,7 @@ def resolve_song_audio_stream(query: str) -> dict:
             'default_search': 'ytsearch1',
             'extractor_args': {
                 'youtube': {
-                    'player_client': ['android', 'ios', 'mweb'],
-                    'player_skip': ['webpage', 'configs'],
+                    'player_client': ['mweb', 'ios', 'android', 'web'],
                 }
             },
             'socket_timeout': 10,

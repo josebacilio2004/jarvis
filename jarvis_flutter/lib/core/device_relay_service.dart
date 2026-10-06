@@ -118,6 +118,13 @@ class DeviceRelayService {
         }
         break;
 
+      case 'play_music':
+        final watchUrl = action['watch_url'] as String?;
+        if (watchUrl != null && watchUrl.isNotEmpty) {
+          await DeviceController.openUrl(watchUrl);
+        }
+        break;
+
       default:
         debugPrint('[DeviceRelay] Acción no manejada directamente: $actType');
     }
