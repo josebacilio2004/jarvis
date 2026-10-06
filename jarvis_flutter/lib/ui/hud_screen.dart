@@ -341,25 +341,38 @@ class _HudScreenState extends State<HudScreen> {
             final manifest = await yt.videos.streamsClient.getManifest(vid);
             final audioStreams = manifest.audioOnly;
             
-            // Extraer exclusivamente flujo de audio para rendimiento ligero y segundo plano
-            AudioStreamInfo? selectedAudio;
-            if (audioStreams.isNotEmpty) {
-              final mp4Streams = audioStreams.where(
-                (s) => s.container.name.toLowerCase() == 'mp4' || s.container.name.toLowerCase() == 'm4a',
-              );
-              selectedAudio = mp4Streams.isNotEmpty
-                  ? mp4Streams.withHighestBitrate()
-                  : audioStreams.withHighestBitrate();
-            } else if (manifest.muxed.isNotEmpty) {
-              selectedAudio = manifest.muxed.withHighestBitrate();
+            const streamHeaders = {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+              'Range': 'bytes=0-',
+            };
+
+            bool started = false;
+            final candidates = <AudioStreamInfo>[
+              ...audioStreams.where((s) => s.container.name.toLowerCase() == 'webm'),
+              ...audioStreams.where((s) => s.container.name.toLowerCase() == 'mp4' || s.container.name.toLowerCase() == 'm4a'),
+              ...audioStreams,
+              ...manifest.muxed,
+            ];
+
+            for (final streamInfo in candidates) {
+              try {
+                final directStreamUrl = streamInfo.url.toString();
+                await _musicPlayer.stop();
+                await _musicPlayer.setUrl(
+                  directStreamUrl,
+                  headers: streamHeaders,
+                );
+                await _musicPlayer.setVolume(_isSpeaking ? 0.15 : 1.0);
+                await _musicPlayer.play();
+                started = true;
+                break;
+              } catch (candidateErr) {
+                debugPrint('[MusicPlayer] Stream (${streamInfo.container.name}) falló: $candidateErr, probando siguiente...');
+              }
             }
 
-            if (selectedAudio != null) {
-              final directStreamUrl = selectedAudio.url.toString();
-              await _musicPlayer.stop();
-              await _musicPlayer.setUrl(directStreamUrl);
-              await _musicPlayer.setVolume(_isSpeaking ? 0.15 : 1.0);
-              await _musicPlayer.play();
+            if (!started) {
+              throw Exception('Ningún canal de audio respondió favorablemente');
             }
           }
         } catch (e) {
