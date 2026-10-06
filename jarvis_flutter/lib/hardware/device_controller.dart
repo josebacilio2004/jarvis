@@ -37,12 +37,12 @@ class DeviceController {
     }
   }
 
-  /// Program an Android system alarm
+  /// Program and automatically activate an Android system alarm
   static Future<bool> setAlarm({
     required int hour,
     required int minute,
     String message = 'Alarma J.A.R.V.I.S.',
-    bool skipUi = false,
+    bool skipUi = true,
   }) async {
     try {
       final intent = AndroidIntent(
@@ -51,8 +51,9 @@ class DeviceController {
           'android.intent.extra.alarm.HOUR': hour,
           'android.intent.extra.alarm.MINUTES': minute,
           'android.intent.extra.alarm.MESSAGE': message,
-          'android.intent.extra.alarm.SKIP_UI': skipUi,
+          'android.intent.extra.alarm.SKIP_UI': true,
         },
+        flags: const <int>[flagActivityNewTask],
       );
       await intent.launch();
       vibrate(100);
@@ -63,11 +64,11 @@ class DeviceController {
     }
   }
 
-  /// Program a countdown timer
+  /// Program and automatically start a countdown timer
   static Future<bool> setTimer({
     required int seconds,
     String message = 'Temporizador J.A.R.V.I.S.',
-    bool skipUi = false,
+    bool skipUi = true,
   }) async {
     try {
       final intent = AndroidIntent(
@@ -75,8 +76,9 @@ class DeviceController {
         arguments: <String, dynamic>{
           'android.intent.extra.alarm.LENGTH': seconds,
           'android.intent.extra.alarm.MESSAGE': message,
-          'android.intent.extra.alarm.SKIP_UI': skipUi,
+          'android.intent.extra.alarm.SKIP_UI': true,
         },
+        flags: const <int>[flagActivityNewTask],
       );
       await intent.launch();
       vibrate(100);
@@ -175,15 +177,32 @@ class DeviceController {
     }
   }
 
-  /// Initiate phone call or dialer
+  /// Initiate and execute phone call immediately
   static Future<bool> makeCall(String target) async {
     try {
-      final cleanTarget = target.replaceAll(' ', '');
-      final intent = AndroidIntent(
+      final cleanDigits = target.replaceAll(RegExp(r'[^0-9+*#]'), '');
+      if (cleanDigits.isNotEmpty) {
+        // 1. Direct call execution via ACTION_CALL
+        try {
+          final callIntent = AndroidIntent(
+            action: 'android.intent.action.CALL',
+            data: 'tel:$cleanDigits',
+            flags: const <int>[flagActivityNewTask],
+          );
+          await callIntent.launch();
+          return true;
+        } catch (e) {
+          debugPrint('[DeviceController] ACTION_CALL error: $e, falling back to DIAL');
+        }
+      }
+
+      // 2. Fallback to DIAL
+      final dialIntent = AndroidIntent(
         action: 'android.intent.action.DIAL',
-        data: 'tel:$cleanTarget',
+        data: 'tel:${target.replaceAll(' ', '')}',
+        flags: const <int>[flagActivityNewTask],
       );
-      await intent.launch();
+      await dialIntent.launch();
       return true;
     } catch (e) {
       debugPrint('[DeviceController] Error dialing call: $e');

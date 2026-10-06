@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../constants.dart';
 import '../core/api_service.dart';
 import '../core/device_relay_service.dart';
@@ -33,7 +34,12 @@ class HudScreen extends StatefulWidget {
 class _HudScreenState extends State<HudScreen> {
   final ApiService _api = ApiService();
   final DeviceRelayService _relay = DeviceRelayService();
-  final AudioPlayer _audioPlayer = AudioPlayer();
+  
+  // Dedicated audio player for Jarvis TTS Voice
+  final AudioPlayer _voicePlayer = AudioPlayer();
+  // Dedicated background audio player for In-App Music
+  final AudioPlayer _musicPlayer = AudioPlayer();
+
   final stt.SpeechToText _speech = stt.SpeechToText();
 
   final TextEditingController _textController = TextEditingController();
@@ -45,6 +51,10 @@ class _HudScreenState extends State<HudScreen> {
   bool _isProcessing = false;
   bool _speechAvailable = false;
   bool _torchActive = false;
+  
+  // In-App Music HUD state
+  String? _currentSongTitle;
+  bool _isMusicPlaying = false;
 
   @override
   void initState() {
@@ -83,7 +93,7 @@ class _HudScreenState extends State<HudScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'ORDEN REMOTA DESDE PC EJECUTADA: ${action['action']}',
+                  'ORDEN REMOTA DESDE PC: ${action['action']}',
                   style: GoogleFonts.shareTechMono(color: Colors.white, fontSize: 11),
                 ),
               ),
@@ -96,6 +106,8 @@ class _HudScreenState extends State<HudScreen> {
           _torchActive = action['enable'] == true;
         }
       });
+      // Execute the action natively inside the phone
+      _handleAction(action);
     }
   }
 
@@ -114,10 +126,23 @@ class _HudScreenState extends State<HudScreen> {
   }
 
   void _initAudio() {
-    _audioPlayer.playerStateStream.listen((state) {
+    _voicePlayer.playerStateStream.listen((state) {
+      if (mounted) {
+        final speaking = state.playing && state.processingState != ProcessingState.completed;
+        setState(() {
+          _isSpeaking = speaking;
+        });
+        // Audio Ducking: smoothly lower background music while Jarvis speaks, restore when finished
+        if (_isMusicPlaying) {
+          _musicPlayer.setVolume(speaking ? 0.25 : 1.0);
+        }
+      }
+    });
+
+    _musicPlayer.playerStateStream.listen((state) {
       if (mounted) {
         setState(() {
-          _isSpeaking = state.playing && state.processingState != ProcessingState.completed;
+          _isMusicPlaying = state.playing && state.processingState != ProcessingState.completed;
         });
       }
     });
@@ -143,7 +168,8 @@ class _HudScreenState extends State<HudScreen> {
   void dispose() {
     _textController.dispose();
     _scrollController.dispose();
-    _audioPlayer.dispose();
+    _voicePlayer.dispose();
+    _musicPlayer.dispose();
     _speech.stop();
     _relay.stopListening();
     super.dispose();
@@ -208,10 +234,10 @@ class _HudScreenState extends State<HudScreen> {
 
   Future<void> _playAudio(String url) async {
     try {
-      await _audioPlayer.setUrl(url);
-      await _audioPlayer.play();
+      await _voicePlayer.setUrl(url);
+      await _voicePlayer.play();
     } catch (e) {
-      debugPrint('[Audio] Play error: $e');
+      debugPrint('[VoiceAudio] Play error: $e');
     }
   }
 
@@ -254,6 +280,10 @@ class _HudScreenState extends State<HudScreen> {
         final title = action['title'] as String? ?? 'Pista de Audio';
         final watchUrl = action['watch_url'] as String?;
 
+        setState(() {
+          _currentSongTitle = title;
+        });
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -265,11 +295,11 @@ class _HudScreenState extends State<HudScreen> {
               ),
               content: Row(
                 children: [
-                  const Icon(Icons.smart_display, color: StarkConstants.starkRed, size: 20),
+                  const Icon(Icons.graphic_eq, color: StarkConstants.primaryCyan, size: 20),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'ABRIENDO EN YOUTUBE: $title',
+                      'SINTONIZANDO EN J.A.R.V.I.S.: $title',
                       style: GoogleFonts.shareTechMono(color: StarkConstants.primaryCyan, fontSize: 11, fontWeight: FontWeight.bold),
                     ),
                   ),
@@ -279,8 +309,27 @@ class _HudScreenState extends State<HudScreen> {
           );
         }
 
-        // Launch YouTube app natively and keep Jarvis in background
-        await DeviceController.openYouTube(videoId: videoId, watchUrl: watchUrl);
+        try {
+          String? directStreamUrl;
+          if (videoId != null && videoId.isNotEmpty) {
+            final yt = YoutubeExplode();
+            final manifest = await yt.videos.streamsClient.getManifest(videoId);
+            final audioStream = manifest.audioOnly.withHighestBitrate();
+            directStreamUrl = audioStream.url.toString();
+            yt.close();
+          }
+
+          if (directStreamUrl != null && directStreamUrl.isNotEmpty) {
+            await _musicPlayer.setUrl(directStreamUrl);
+            await _musicPlayer.setVolume(1.0);
+            await _musicPlayer.play();
+          } else if (watchUrl != null && watchUrl.isNotEmpty) {
+            await _musicPlayer.setUrl(watchUrl);
+            await _musicPlayer.play();
+          }
+        } catch (e) {
+          debugPrint('[MusicPlayer] Error resolviendo stream en app: $e');
+        }
         break;
     }
   }
@@ -419,6 +468,9 @@ class _HudScreenState extends State<HudScreen> {
 
               // QUICK HARDWARE BUTTONS
               _buildQuickActionsRow(),
+
+              // STARK HUD IN-APP MUSIC PLAYER BAR
+              _buildMusicPlayerBar(),
 
               const SizedBox(height: 6),
 
@@ -571,6 +623,77 @@ class _HudScreenState extends State<HudScreen> {
             Text(label, style: GoogleFonts.shareTechMono(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildMusicPlayerBar() {
+    if (_currentSongTitle == null) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: StarkConstants.panelBg,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: StarkConstants.primaryCyan.withValues(alpha: 0.6)),
+        boxShadow: [
+          BoxShadow(
+            color: StarkConstants.primaryCyan.withValues(alpha: 0.15),
+            blurRadius: 8,
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Icon(
+            _isMusicPlaying ? Icons.graphic_eq : Icons.music_note,
+            color: StarkConstants.primaryCyan,
+            size: 20,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _currentSongTitle!,
+                  style: GoogleFonts.shareTechMono(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  _isMusicPlaying ? 'REPRODUCIENDO EN J.A.R.V.I.S.' : 'PAUSADO',
+                  style: GoogleFonts.shareTechMono(color: StarkConstants.primaryCyan, fontSize: 9),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: Icon(
+              _isMusicPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
+              color: StarkConstants.primaryCyan,
+              size: 24,
+            ),
+            onPressed: () {
+              if (_isMusicPlaying) {
+                _musicPlayer.pause();
+              } else {
+                _musicPlayer.play();
+              }
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.stop_circle, color: StarkConstants.starkRed, size: 22),
+            onPressed: () {
+              _musicPlayer.stop();
+              setState(() {
+                _isMusicPlaying = false;
+                _currentSongTitle = null;
+              });
+            },
+          ),
+        ],
       ),
     );
   }

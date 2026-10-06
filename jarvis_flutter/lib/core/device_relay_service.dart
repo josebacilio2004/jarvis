@@ -119,9 +119,7 @@ class DeviceRelayService {
         break;
 
       case 'play_music':
-        final videoId = action['video_id'] as String?;
-        final watchUrl = action['watch_url'] as String?;
-        await DeviceController.openYouTube(videoId: videoId, watchUrl: watchUrl);
+        // Handled by onRemoteActionReceived in HUD to play inside the app
         break;
 
       default:
