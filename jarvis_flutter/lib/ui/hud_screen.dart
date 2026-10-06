@@ -55,6 +55,8 @@ class _HudScreenState extends State<HudScreen> {
   // In-App Music HUD state
   String? _currentSongTitle;
   bool _isMusicPlaying = false;
+  String? _lastActionKey;
+  DateTime? _lastActionTime;
 
   @override
   void initState() {
@@ -262,6 +264,16 @@ class _HudScreenState extends State<HudScreen> {
   Future<void> _handleAction(Map<String, dynamic> action) async {
     final type = action['action'] as String?;
     if (type == null) return;
+
+    // Evitar doble ejecución si la orden llegó concurrentemente desde SSE y Relay
+    final actionKey = '$type:${action['video_id'] ?? action['target'] ?? action['query'] ?? action['title'] ?? action['hour']}';
+    final now = DateTime.now();
+    if (_lastActionKey == actionKey && _lastActionTime != null && now.difference(_lastActionTime!).inMilliseconds < 4000) {
+      debugPrint('[Action] Ignorando acción duplicada concurrente: $actionKey');
+      return;
+    }
+    _lastActionKey = actionKey;
+    _lastActionTime = now;
 
     switch (type) {
       case 'toggle_flashlight':
