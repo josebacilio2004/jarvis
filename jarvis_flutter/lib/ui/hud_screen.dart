@@ -296,7 +296,7 @@ class _HudScreenState extends State<HudScreen> {
       case 'play_music':
         final videoId = action['video_id'] as String?;
         final title = action['title'] as String? ?? 'Pista de Audio';
-        final watchUrl = action['watch_url'] as String?;
+        final query = action['query'] as String? ?? title;
 
         setState(() {
           _currentSongTitle = title;
@@ -327,41 +327,56 @@ class _HudScreenState extends State<HudScreen> {
           );
         }
 
+        final yt = YoutubeExplode();
         try {
-          String? directStreamUrl;
-          if (videoId != null && videoId.isNotEmpty) {
-            final yt = YoutubeExplode();
-            try {
-              final manifest = await yt.videos.streamsClient.getManifest(videoId);
-              final audioStreams = manifest.audioOnly;
-              if (audioStreams.isNotEmpty) {
-                final mp4Streams = audioStreams.where((s) => s.container.name.toLowerCase() == 'mp4');
-                final audioStream = mp4Streams.isNotEmpty
-                    ? mp4Streams.withHighestBitrate()
-                    : audioStreams.withHighestBitrate();
-                directStreamUrl = audioStream.url.toString();
-              } else if (manifest.muxed.isNotEmpty) {
-                directStreamUrl = manifest.muxed.withHighestBitrate().url.toString();
-              }
-            } finally {
-              yt.close();
+          String? vid = videoId;
+          if (vid == null || vid.isEmpty) {
+            final searchResults = await yt.search.search(query);
+            if (searchResults.isNotEmpty) {
+              vid = searchResults.first.id.value;
             }
           }
 
-          if (directStreamUrl != null && directStreamUrl.isNotEmpty) {
-            await _musicPlayer.stop();
-            await _musicPlayer.setUrl(directStreamUrl);
-            await _musicPlayer.setVolume(_isSpeaking ? 0.15 : 1.0);
-            await _musicPlayer.play();
-          } else if (watchUrl != null && watchUrl.isNotEmpty) {
-            // Si la extracción en segundo plano falla, derivar a YouTube app
-            await DeviceController.openYouTube(videoId: videoId, watchUrl: watchUrl);
+          if (vid != null && vid.isNotEmpty) {
+            final manifest = await yt.videos.streamsClient.getManifest(vid);
+            final audioStreams = manifest.audioOnly;
+            
+            // Extraer exclusivamente flujo de audio para rendimiento ligero y segundo plano
+            AudioStreamInfo? selectedAudio;
+            if (audioStreams.isNotEmpty) {
+              final mp4Streams = audioStreams.where(
+                (s) => s.container.name.toLowerCase() == 'mp4' || s.container.name.toLowerCase() == 'm4a',
+              );
+              selectedAudio = mp4Streams.isNotEmpty
+                  ? mp4Streams.withHighestBitrate()
+                  : audioStreams.withHighestBitrate();
+            } else if (manifest.muxed.isNotEmpty) {
+              selectedAudio = manifest.muxed.withHighestBitrate();
+            }
+
+            if (selectedAudio != null) {
+              final directStreamUrl = selectedAudio.url.toString();
+              await _musicPlayer.stop();
+              await _musicPlayer.setUrl(directStreamUrl);
+              await _musicPlayer.setVolume(_isSpeaking ? 0.15 : 1.0);
+              await _musicPlayer.play();
+            }
           }
         } catch (e) {
-          debugPrint('[MusicPlayer] Error resolviendo stream en app: $e');
-          if (watchUrl != null && watchUrl.isNotEmpty) {
-            await DeviceController.openYouTube(videoId: videoId, watchUrl: watchUrl);
+          debugPrint('[MusicPlayer] Error extrayendo audio en app: $e');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                backgroundColor: StarkConstants.panelBg,
+                content: Text(
+                  'Error al sintonizar audio: $e',
+                  style: GoogleFonts.shareTechMono(color: StarkConstants.starkRed, fontSize: 11),
+                ),
+              ),
+            );
           }
+        } finally {
+          yt.close();
         }
         break;
     }
