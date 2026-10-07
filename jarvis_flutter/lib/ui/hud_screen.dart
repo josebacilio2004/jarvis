@@ -80,7 +80,7 @@ class _HudScreenState extends State<HudScreen> {
     _startTelemetrySync();
 
     DeviceController.showNotification(
-      title: 'J.A.R.V.I.S. NEURAL CORE v1.2.3',
+      title: 'J.A.R.V.I.S. NEURAL CORE v1.2.4',
       content: 'Sistemas activos • En línea',
       isPlaying: false,
     );
@@ -770,13 +770,13 @@ class _HudScreenState extends State<HudScreen> {
 
               // ARC REACTOR & TELEMETRY
               Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                padding: const EdgeInsets.symmetric(vertical: 4.0),
                 child: GestureDetector(
                   onTap: _toggleListening,
                   child: ArcReactorWidget(
                     isSpeaking: _isSpeaking || _isMusicPlaying,
                     isListening: _isListening,
-                    size: 140,
+                    size: 145,
                   ),
                 ),
               ),
@@ -838,7 +838,7 @@ class _HudScreenState extends State<HudScreen> {
                     ),
                   ),
                   Text(
-                    'MARK VII • v1.2.3',
+                    'MARK VII • v1.2.4',
                     style: GoogleFonts.shareTechMono(
                       color: StarkConstants.textDim,
                       fontSize: 8,
