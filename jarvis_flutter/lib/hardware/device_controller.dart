@@ -177,6 +177,15 @@ class DeviceController {
     }
   }
 
+  /// Request all essential runtime permissions (Contacts, Calendar, Call, Notifications, Camera)
+  static Future<void> requestEssentialPermissions() async {
+    try {
+      await _appChannel.invokeMethod('requestPermissions');
+    } catch (e) {
+      debugPrint('[DeviceController] Error requesting essential permissions: $e');
+    }
+  }
+
   /// Request call permission from Android OS
   static Future<bool> requestCallPermission() async {
     try {

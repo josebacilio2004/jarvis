@@ -72,14 +72,14 @@ class _HudScreenState extends State<HudScreen> {
     _initSpeech();
     _initAudio();
     _loadHistory();
-    DeviceController.requestCallPermission();
+    DeviceController.requestEssentialPermissions();
 
     // Start background relay for PC remote control
     _restartRelay();
     _startTelemetrySync();
 
     DeviceController.showNotification(
-      title: 'J.A.R.V.I.S. NEURAL CORE v1.2',
+      title: 'J.A.R.V.I.S. NEURAL CORE v1.2.1',
       content: 'Sistemas activos • En línea',
       isPlaying: false,
     );
@@ -786,7 +786,7 @@ class _HudScreenState extends State<HudScreen> {
                     ),
                   ),
                   Text(
-                    'MARK VII • v1.2.0',
+                    'MARK VII • v1.2.1',
                     style: GoogleFonts.shareTechMono(
                       color: StarkConstants.textDim,
                       fontSize: 8,
