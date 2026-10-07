@@ -102,6 +102,26 @@ class MainActivity : FlutterActivity() {
                     manager.cancel(NOTIF_ID)
                     result.success(true)
                 }
+                "sendWhatsApp" -> {
+                    val target = call.argument<String>("target") ?: ""
+                    val message = call.argument<String>("message") ?: ""
+                    sendWhatsApp(target, message)
+                    result.success(true)
+                }
+                "makeWhatsAppCall" -> {
+                    val target = call.argument<String>("target") ?: ""
+                    makeWhatsAppCall(target)
+                    result.success(true)
+                }
+                "addCalendarEvent" -> {
+                    val title = call.argument<String>("title") ?: "Evento Stark"
+                    val description = call.argument<String>("description")
+                    val startTimeMs = (call.argument<Number>("startTimeMs"))?.toLong() ?: System.currentTimeMillis()
+                    val endTimeMs = (call.argument<Number>("endTimeMs"))?.toLong() ?: (startTimeMs + 3600000L)
+                    val location = call.argument<String>("location")
+                    addCalendarEvent(title, description, startTimeMs, endTimeMs, location)
+                    result.success(true)
+                }
                 else -> {
                     result.notImplemented()
                 }
@@ -180,6 +200,152 @@ class MainActivity : FlutterActivity() {
             }
             pendingNumber = null
             pendingResult = null
+        }
+    }
+
+    private fun resolvePhoneNumber(target: String): String? {
+        val clean = target.replace(Regex("[^0-9+]"), "")
+        if (clean.length >= 7) {
+            return clean
+        }
+        if (checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) {
+            try {
+                val cursor = contentResolver.query(
+                    android.provider.ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                    arrayOf(
+                        android.provider.ContactsContract.CommonDataKinds.Phone.NUMBER,
+                        android.provider.ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME
+                    ),
+                    "${android.provider.ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} LIKE ?",
+                    arrayOf("%$target%"),
+                    null
+                )
+                cursor?.use {
+                    if (it.moveToFirst()) {
+                        return it.getString(it.getColumnIndexOrThrow(android.provider.ContactsContract.CommonDataKinds.Phone.NUMBER))
+                    }
+                }
+            } catch (e: Exception) {
+                // Ignore
+            }
+        }
+        return null
+    }
+
+    private fun sendWhatsApp(target: String, message: String) {
+        val phone = resolvePhoneNumber(target) ?: target
+        var cleanPhone = phone.replace(Regex("[^0-9]"), "")
+        if (cleanPhone.length == 9 && cleanPhone.startsWith("9")) {
+            cleanPhone = "51$cleanPhone"
+        }
+
+        try {
+            val url = if (cleanPhone.length >= 8) {
+                "https://api.whatsapp.com/send?phone=$cleanPhone&text=${Uri.encode(message)}"
+            } else {
+                "whatsapp://send?text=${Uri.encode(message)}"
+            }
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                setPackage("com.whatsapp")
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            try {
+                val fallbackIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://api.whatsapp.com/send?text=${Uri.encode(message)}")).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                startActivity(fallbackIntent)
+            } catch (e2: Exception) {
+                // Ignore
+            }
+        }
+    }
+
+    private fun makeWhatsAppCall(target: String) {
+        val phone = resolvePhoneNumber(target) ?: target
+        var cleanPhone = phone.replace(Regex("[^0-9]"), "")
+        if (cleanPhone.length == 9 && cleanPhone.startsWith("9")) {
+            cleanPhone = "51$cleanPhone"
+        }
+
+        var callStarted = false
+        // 1. Try native WhatsApp VoIP data row in ContactsContract
+        if (checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) {
+            try {
+                val projection = arrayOf(
+                    android.provider.ContactsContract.Data._ID,
+                    android.provider.ContactsContract.Data.DATA1
+                )
+                val selection = "${android.provider.ContactsContract.Data.MIMETYPE} = ? AND (${android.provider.ContactsContract.Data.DATA1} LIKE ? OR ${android.provider.ContactsContract.Data.DISPLAY_NAME} LIKE ?)"
+                val selectionArgs = arrayOf(
+                    "vnd.android.cursor.item/vnd.com.whatsapp.voip.call",
+                    "%$cleanPhone%",
+                    "%$target%"
+                )
+                val cursor = contentResolver.query(
+                    android.provider.ContactsContract.Data.CONTENT_URI,
+                    projection,
+                    selection,
+                    selectionArgs,
+                    null
+                )
+                cursor?.use {
+                    if (it.moveToFirst()) {
+                        val dataId = it.getLong(it.getColumnIndexOrThrow(android.provider.ContactsContract.Data._ID))
+                        val intent = Intent(Intent.ACTION_VIEW).apply {
+                            setDataAndType(
+                                Uri.withAppendedPath(android.provider.ContactsContract.Data.CONTENT_URI, dataId.toString()),
+                                "vnd.android.cursor.item/vnd.com.whatsapp.voip.call"
+                            )
+                            setPackage("com.whatsapp")
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        }
+                        startActivity(intent)
+                        callStarted = true
+                    }
+                }
+            } catch (e: Exception) {
+                // Ignore
+            }
+        }
+
+        // 2. Fallback: Open WhatsApp direct chat
+        if (!callStarted) {
+            try {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://api.whatsapp.com/send?phone=$cleanPhone")).apply {
+                    setPackage("com.whatsapp")
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                startActivity(intent)
+            } catch (e: Exception) {
+                dialDirect(cleanPhone)
+            }
+        }
+    }
+
+    private fun addCalendarEvent(
+        title: String,
+        description: String?,
+        startTimeMs: Long,
+        endTimeMs: Long,
+        location: String?
+    ) {
+        try {
+            val intent = Intent(Intent.ACTION_INSERT).apply {
+                data = android.provider.CalendarContract.Events.CONTENT_URI
+                putExtra(android.provider.CalendarContract.Events.TITLE, title)
+                putExtra(android.provider.CalendarContract.Events.DESCRIPTION, description ?: "")
+                putExtra(android.provider.CalendarContract.EXTRA_EVENT_BEGIN_TIME, startTimeMs)
+                putExtra(android.provider.CalendarContract.EXTRA_EVENT_END_TIME, endTimeMs)
+                if (!location.isNullOrBlank()) {
+                    putExtra(android.provider.CalendarContract.Events.EVENT_LOCATION, location)
+                }
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            // Ignore
         }
     }
 }

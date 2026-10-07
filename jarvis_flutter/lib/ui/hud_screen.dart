@@ -14,7 +14,7 @@ import 'arc_reactor.dart';
 class ChatMessage {
   final String role; // 'user' or 'jarvis'
   String content;
-  final Map<String, dynamic>? action;
+  Map<String, dynamic>? action;
   final DateTime timestamp;
 
   ChatMessage({
@@ -79,7 +79,7 @@ class _HudScreenState extends State<HudScreen> {
     _startTelemetrySync();
 
     DeviceController.showNotification(
-      title: 'J.A.R.V.I.S. NEURAL CORE v1.1',
+      title: 'J.A.R.V.I.S. NEURAL CORE v1.2',
       content: 'Sistemas activos • En línea',
       isPlaying: false,
     );
@@ -342,6 +342,11 @@ class _HudScreenState extends State<HudScreen> {
       final stream = _api.sendChatMessageStream(
         message: text,
         onAction: (action) {
+          if (mounted) {
+            setState(() {
+              botMessage.action = action;
+            });
+          }
           _handleAction(action);
         },
         onAudio: (audioUrl) {
@@ -452,6 +457,42 @@ class _HudScreenState extends State<HudScreen> {
       case 'call':
         final target = action['target'] as String? ?? '';
         if (target.isNotEmpty) await DeviceController.makeCall(target);
+        break;
+
+      case 'whatsapp_send':
+        final target = action['target'] as String? ?? '';
+        final text = action['message_text'] as String? ?? '';
+        if (target.isNotEmpty) {
+          await DeviceController.sendWhatsApp(target: target, message: text);
+        }
+        break;
+
+      case 'whatsapp_call':
+        final target = action['target'] as String? ?? '';
+        if (target.isNotEmpty) {
+          await DeviceController.makeWhatsAppCall(target: target);
+        }
+        break;
+
+      case 'calendar_add':
+        final title = action['title'] as String? ?? 'Evento Stark';
+        final dateStr = action['date'] as String? ?? '';
+        final timeStr = action['time'] as String? ?? '09:00';
+        final dur = (action['duration'] as num?)?.toInt() ?? 60;
+        final desc = action['description'] as String?;
+        DateTime start;
+        try {
+          start = DateTime.parse('${dateStr}T$timeStr:00');
+        } catch (_) {
+          start = DateTime.now().add(const Duration(hours: 1));
+        }
+        final end = start.add(Duration(minutes: dur));
+        await DeviceController.addCalendarEvent(
+          title: title,
+          description: desc,
+          startTime: start,
+          endTime: end,
+        );
         break;
 
       case 'play_music':
@@ -745,7 +786,7 @@ class _HudScreenState extends State<HudScreen> {
                     ),
                   ),
                   Text(
-                    'MARK VII • v1.1.0',
+                    'MARK VII • v1.2.0',
                     style: GoogleFonts.shareTechMono(
                       color: StarkConstants.textDim,
                       fontSize: 8,
@@ -1026,18 +1067,131 @@ class _HudScreenState extends State<HudScreen> {
                 )
               ],
             ),
-            child: Text(
-              msg.content,
-              style: GoogleFonts.shareTechMono(
-                color: isUser ? Colors.white : StarkConstants.primaryCyan,
-                fontSize: 12.5,
-                height: 1.4,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  msg.content,
+                  style: GoogleFonts.shareTechMono(
+                    color: isUser ? Colors.white : StarkConstants.primaryCyan,
+                    fontSize: 12.5,
+                    height: 1.4,
+                  ),
+                ),
+                if (msg.action != null) ...[
+                  const SizedBox(height: 6),
+                  _buildActionCard(msg.action!),
+                ],
+              ],
             ),
           ),
         );
       },
     );
+  }
+
+  Widget _buildActionCard(Map<String, dynamic> action) {
+    final type = action['action'] as String? ?? '';
+    if (type == 'whatsapp_send') {
+      final target = action['target'] as String? ?? '';
+      final msg = action['message_text'] as String? ?? '';
+      return Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: const Color(0xFF25D366).withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: const Color(0xFF25D366).withValues(alpha: 0.5)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.chat, color: Color(0xFF25D366), size: 16),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'WHATSAPP: $target\n"$msg"',
+                style: GoogleFonts.shareTechMono(color: const Color(0xFF25D366), fontSize: 10),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 6),
+            InkWell(
+              onTap: () => DeviceController.sendWhatsApp(target: target, message: msg),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF25D366),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text('ABRIR', style: GoogleFonts.orbitron(color: Colors.black, fontSize: 9, fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ],
+        ),
+      );
+    } else if (type == 'whatsapp_call') {
+      final target = action['target'] as String? ?? '';
+      return Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: const Color(0xFF25D366).withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: const Color(0xFF25D366).withValues(alpha: 0.5)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.call, color: Color(0xFF25D366), size: 16),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'LLAMADA WHATSAPP: $target',
+                style: GoogleFonts.shareTechMono(color: const Color(0xFF25D366), fontSize: 10, fontWeight: FontWeight.bold),
+              ),
+            ),
+            const SizedBox(width: 6),
+            InkWell(
+              onTap: () => DeviceController.makeWhatsAppCall(target: target),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF25D366),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text('LLAMAR', style: GoogleFonts.orbitron(color: Colors.black, fontSize: 9, fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ],
+        ),
+      );
+    } else if (type == 'calendar_add') {
+      final title = action['title'] as String? ?? 'Evento';
+      final date = action['date'] as String? ?? '';
+      final time = action['time'] as String? ?? '';
+      return Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: StarkConstants.starkGold.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: StarkConstants.starkGold.withValues(alpha: 0.5)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.calendar_month, color: StarkConstants.starkGold, size: 16),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'CALENDARIO: $title\n$date a las $time',
+                style: GoogleFonts.shareTechMono(color: StarkConstants.starkGold, fontSize: 10),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return const SizedBox.shrink();
   }
 
   Widget _buildInputBar() {

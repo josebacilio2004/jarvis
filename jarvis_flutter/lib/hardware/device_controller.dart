@@ -283,4 +283,62 @@ class DeviceController {
       debugPrint('[DeviceController] Error canceling notification: $e');
     }
   }
+
+  /// Send WhatsApp message to contact name or phone number
+  static Future<bool> sendWhatsApp({
+    required String target,
+    required String message,
+  }) async {
+    try {
+      final res = await _appChannel.invokeMethod<bool>('sendWhatsApp', {
+        'target': target,
+        'message': message,
+      });
+      vibrate(60);
+      return res ?? false;
+    } catch (e) {
+      debugPrint('[DeviceController] Error sending WhatsApp: $e');
+      return false;
+    }
+  }
+
+  /// Initiate WhatsApp VoIP voice call to contact name or phone number
+  static Future<bool> makeWhatsAppCall({
+    required String target,
+  }) async {
+    try {
+      final res = await _appChannel.invokeMethod<bool>('makeWhatsAppCall', {
+        'target': target,
+      });
+      vibrate(80);
+      return res ?? false;
+    } catch (e) {
+      debugPrint('[DeviceController] Error making WhatsApp call: $e');
+      return false;
+    }
+  }
+
+  /// Add event to Google Calendar / Android native calendar
+  static Future<bool> addCalendarEvent({
+    required String title,
+    String? description,
+    required DateTime startTime,
+    required DateTime endTime,
+    String? location,
+  }) async {
+    try {
+      final res = await _appChannel.invokeMethod<bool>('addCalendarEvent', {
+        'title': title,
+        'description': description,
+        'startTimeMs': startTime.millisecondsSinceEpoch,
+        'endTimeMs': endTime.millisecondsSinceEpoch,
+        'location': location,
+      });
+      vibrate(60);
+      return res ?? false;
+    } catch (e) {
+      debugPrint('[DeviceController] Error adding calendar event: $e');
+      return false;
+    }
+  }
 }

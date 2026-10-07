@@ -53,6 +53,7 @@ def init_db():
         mongo_db.messages.create_index([("user_id", 1), ("_id", -1)])
         mongo_db.preferences.create_index([("user_id", 1), ("key", 1)], unique=True)
         mongo_db.tasks.create_index([("user_id", 1), ("id", -1)])
+        mongo_db.calendar_events.create_index([("user_id", 1), ("date", 1), ("time", 1)])
         
         # Ensure default preferences
         for k, v in [("user_name", "José"), ("combat_mode", "false"), ("hands_free", "false"), ("role", "admin")]:
@@ -88,6 +89,17 @@ def init_db():
                         status VARCHAR(30) DEFAULT 'pending',
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         due_date TEXT
+                    );
+                    CREATE TABLE IF NOT EXISTS calendar_events (
+                        id SERIAL PRIMARY KEY,
+                        user_id VARCHAR(100) DEFAULT 'default',
+                        title TEXT NOT NULL,
+                        date VARCHAR(20) NOT NULL,
+                        time VARCHAR(20) NOT NULL,
+                        duration_minutes INTEGER DEFAULT 60,
+                        description TEXT,
+                        location TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     );
                 """)
                 cur.execute("""
@@ -129,6 +141,19 @@ def init_db():
                 status TEXT DEFAULT 'pending',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 due_date TEXT
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS calendar_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT DEFAULT 'default',
+                title TEXT NOT NULL,
+                date TEXT NOT NULL,
+                time TEXT NOT NULL,
+                duration_minutes INTEGER DEFAULT 60,
+                description TEXT,
+                location TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         """)
         cursor.execute("INSERT OR IGNORE INTO preferences (user_id, key, value) VALUES ('default', 'user_name', 'José')")
@@ -410,6 +435,97 @@ def delete_task(user_id: str, task_id: int) -> bool:
     with get_sqlite_conn() as conn:
         cursor = conn.cursor()
         cursor.execute("DELETE FROM tasks WHERE user_id = ? AND id = ?", (uid, task_id))
+        conn.commit()
+        return cursor.rowcount > 0
+
+# === CALENDAR EVENTS ===
+def add_calendar_event(user_id: str, title: str, date: str, time: str, duration_minutes: int = 60, description: str = "", location: str = "") -> int:
+    uid = user_id or "default"
+    now_iso = datetime.now().isoformat()
+    if DB_TYPE == "mongodb":
+        last = mongo_db.calendar_events.find_one(sort=[("id", -1)])
+        next_id = (last["id"] + 1) if last and "id" in last else 1
+        mongo_db.calendar_events.insert_one({
+            "id": next_id,
+            "user_id": uid,
+            "title": title,
+            "date": date,
+            "time": time,
+            "duration_minutes": duration_minutes,
+            "description": description,
+            "location": location,
+            "created_at": now_iso
+        })
+        return next_id
+
+    if DB_TYPE == "postgres":
+        import psycopg2
+        with psycopg2.connect(pg_conn_url) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO calendar_events (user_id, title, date, time, duration_minutes, description, location) VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id;",
+                    (uid, title, date, time, duration_minutes, description, location)
+                )
+                new_id = cur.fetchone()[0]
+            conn.commit()
+            return new_id
+
+    with get_sqlite_conn() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO calendar_events (user_id, title, date, time, duration_minutes, description, location) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (uid, title, date, time, duration_minutes, description, location)
+        )
+        conn.commit()
+        return cursor.lastrowid
+
+def get_calendar_events(user_id: str, date_filter: str = None) -> list:
+    uid = user_id or "default"
+    if DB_TYPE == "mongodb":
+        query = {"user_id": uid}
+        if date_filter:
+            query["date"] = date_filter
+        docs = list(mongo_db.calendar_events.find(query, {"_id": 0}).sort([("date", 1), ("time", 1)]))
+        return docs
+
+    if DB_TYPE == "postgres":
+        import psycopg2
+        with psycopg2.connect(pg_conn_url) as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                if date_filter:
+                    cur.execute("SELECT id, user_id, title, date, time, duration_minutes, description, location, created_at FROM calendar_events WHERE user_id = %s AND date = %s ORDER BY time ASC", (uid, date_filter))
+                else:
+                    cur.execute("SELECT id, user_id, title, date, time, duration_minutes, description, location, created_at FROM calendar_events WHERE user_id = %s ORDER BY date ASC, time ASC", (uid,))
+                rows = cur.fetchall()
+                return [dict(r) for r in rows]
+
+    with get_sqlite_conn() as conn:
+        cursor = conn.cursor()
+        if date_filter:
+            cursor.execute("SELECT id, user_id, title, date, time, duration_minutes, description, location, created_at FROM calendar_events WHERE user_id = ? AND date = ? ORDER BY time ASC", (uid, date_filter))
+        else:
+            cursor.execute("SELECT id, user_id, title, date, time, duration_minutes, description, location, created_at FROM calendar_events WHERE user_id = ? ORDER BY date ASC, time ASC", (uid,))
+        rows = cursor.fetchall()
+        return [dict(r) for r in rows]
+
+def delete_calendar_event(user_id: str, event_id: int) -> bool:
+    uid = user_id or "default"
+    if DB_TYPE == "mongodb":
+        res = mongo_db.calendar_events.delete_one({"user_id": uid, "id": int(event_id)})
+        return res.deleted_count > 0
+
+    if DB_TYPE == "postgres":
+        import psycopg2
+        with psycopg2.connect(pg_conn_url) as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM calendar_events WHERE user_id = %s AND id = %s", (uid, int(event_id)))
+                affected = cur.rowcount > 0
+            conn.commit()
+            return affected
+
+    with get_sqlite_conn() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM calendar_events WHERE user_id = ? AND id = ?", (uid, event_id))
         conn.commit()
         return cursor.rowcount > 0
 

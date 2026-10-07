@@ -3,6 +3,8 @@ import re
 import json
 import time
 import queue
+import urllib.parse
+from datetime import datetime, timedelta
 from flask import Flask, render_template, request, jsonify, Response, stream_with_context, send_from_directory
 from flask_cors import CORS
 from google import genai
@@ -70,6 +72,14 @@ CAPACIDADES MULTIMEDIA Y PROTOCOLOS DE ACCIÓN:
 [ACCION:VOLUMEN:SUBIR] o [ACCION:VOLUMEN:BAJAR]
 - Si te pide captura de pantalla:
 [ACCION:CAPTURA]
+- Si te pide enviar un mensaje por WhatsApp ("envía un mensaje por whatsapp a X que diga Y", "mándale un whatsapp a X diciendo Y", "escríbele a X por whatsapp"):
+[ACCION:WHATSAPP:contacto_o_numero|mensaje]
+- Si te pide llamar o hacer una llamada por WhatsApp ("llama por whatsapp a X", "haz una llamada de whatsapp a X"):
+[ACCION:WHATSAPP_LLAMAR:contacto_o_numero]
+- Si te pide agendar, programar o guardar un evento o cita en el calendario o Google Calendar ("agenda una reunión mañana a las 4pm sobre...", "crea un evento en mi calendario el viernes a las 10:00", "programa cita médica"):
+[ACCION:CALENDARIO:titulo|YYYY-MM-DD|HH:MM|duracion_minutos|descripcion]
+- Si te pregunta por su agenda o eventos del calendario ("¿qué tengo en mi agenda?", "¿cuáles son mis próximos eventos?", "¿qué tengo para hoy/mañana?"):
+[ACCION:CALENDARIO_CONSULTAR:fecha_o_hoy]
 
 - Si el usuario saluda con "buenos días" o "informe matutino", dale un Stark Daily Briefing conciso indicando hora, estado de sistemas y disposición para las misiones del día.
 - Si el usuario te indica su nombre, guárdalo y úsalo con respeto.
@@ -112,6 +122,8 @@ def get_or_create_user_session(user_id: str, model_name=None):
     target_model = model_name or ACTIVE_MODEL
     name_display = user_name if user_name else "Usuario"
     sys_instruction = JARVIS_SYSTEM.replace("{nombre}", name_display)
+    now_dt = datetime.now()
+    sys_instruction += f"\n\n[FECHA Y HORA ACTUAL DEL SISTEMA]: {now_dt.strftime('%Y-%m-%d %H:%M (%A)')}. Usa esta fecha como referencia para calcular días relativos ('hoy', 'mañana', etc.) al agendar eventos."
 
     # First onboarding greeting prompt for new unidentified users
     if not user_name:
@@ -172,7 +184,7 @@ def push_device_event(user_id: str, event_data: dict):
 def execute_embedded_actions(text: str, user_id: str):
     """Detect and execute [ACCION:TIPO:OBJETO] or [TIPO:OBJETO] tags embedded in Gemini response."""
     action_match = re.search(r'\[(?:ACCION:)?(\w+)(?::([^\]]+))?\]', text)
-    clean_text = re.sub(r'\[?(?:ACCION:)?(?:REPRODUCIR|PLAY|CREAR_TAREA|TAREA|COMPLETAR_TAREA|TERMINAR_TAREA|LLAMAR|CALL|ABRIR|BUSCAR|CAPTURA|ALARMA|ALARM|TEMPORIZADOR|TIMER|LINTERNA|FLASHLIGHT|TORCH|MAPAS|MAPS|UBICACION|RUTA|CAMARA|CAMERA|PAUSAR_MUSICA|REANUDAR_MUSICA|DETENER_MUSICA|VOLUMEN|VOLUME):?[^\]]*\]?', '', text).strip()
+    clean_text = re.sub(r'\[?(?:ACCION:)?(?:REPRODUCIR|PLAY|CREAR_TAREA|TAREA|COMPLETAR_TAREA|TERMINAR_TAREA|LLAMAR|CALL|ABRIR|BUSCAR|CAPTURA|ALARMA|ALARM|TEMPORIZADOR|TIMER|LINTERNA|FLASHLIGHT|TORCH|MAPAS|MAPS|UBICACION|RUTA|CAMARA|CAMERA|PAUSAR_MUSICA|REANUDAR_MUSICA|DETENER_MUSICA|VOLUMEN|VOLUME|WHATSAPP|WHATSAPP_LLAMAR|WHATSAPP_CALL|CALENDARIO|CALENDAR|CALENDARIO_CONSULTAR|AGENDA):?[^\]]*\]?', '', text).strip()
     action_result = None
     if action_match:
         act_type = action_match.group(1).upper()
@@ -194,6 +206,69 @@ def execute_embedded_actions(text: str, user_id: str):
             action_result = {"action": "volume_control", "direction": direction, "message": f"Ajustando volumen hacia {'arriba' if direction == 'up' else 'abajo'}, Señor."}
         elif act_type in ["CAMARA", "CAMERA", "ENCENDER_CAMARA", "ABRIR_CAMARA"]:
             action_result = {"action": "open_camera", "message": "Iniciando sensores ópticos y cámara del dispositivo, Señor."}
+        elif act_type in ["WHATSAPP", "WHATSAPP_MENSAJE", "WHATSAPP_SEND"]:
+            parts = act_target.split("|", 1)
+            target = parts[0].strip()
+            msg = parts[1].strip() if len(parts) > 1 else ""
+            clean_digits = re.sub(r'[^0-9]', '', target)
+            wa_url = f"https://api.whatsapp.com/send?phone={clean_digits}&text={urllib.parse.quote(msg)}" if clean_digits else f"https://api.whatsapp.com/send?text={urllib.parse.quote(msg)}"
+            action_result = {
+                "action": "whatsapp_send",
+                "target": target,
+                "message_text": msg,
+                "wa_url": wa_url,
+                "message": f"Canal seguro de WhatsApp configurado para {target}."
+            }
+        elif act_type in ["WHATSAPP_LLAMAR", "WHATSAPP_CALL", "WHATSAPP_VOIP"]:
+            action_result = {
+                "action": "whatsapp_call",
+                "target": act_target,
+                "message": f"Iniciando enlace de llamada por WhatsApp con {act_target}."
+            }
+        elif act_type in ["CALENDARIO", "CALENDAR", "CALENDARIO_AGENDAR", "AGENDAR"]:
+            parts = act_target.split("|")
+            title = parts[0].strip()
+            date = parts[1].strip() if len(parts) > 1 and parts[1].strip() else datetime.now().strftime("%Y-%m-%d")
+            time_str = parts[2].strip() if len(parts) > 2 and parts[2].strip() else "09:00"
+            duration = int(parts[3].strip()) if len(parts) > 3 and parts[3].strip().isdigit() else 60
+            desc = parts[4].strip() if len(parts) > 4 else ""
+            
+            event_id = db.add_calendar_event(user_id, title, date, time_str, duration, desc)
+            
+            # Generate Google Calendar Web URL:
+            try:
+                dt_start = datetime.strptime(f"{date} {time_str}", "%Y-%m-%d %H:%M")
+                dt_end = dt_start + timedelta(minutes=duration)
+                dates_param = f"{dt_start.strftime('%Y%m%dT%H%M00')}/{dt_end.strftime('%Y%m%dT%H%M00')}"
+                gcal_url = f"https://calendar.google.com/calendar/render?action=TEMPLATE&text={urllib.parse.quote(title)}&dates={dates_param}&details={urllib.parse.quote(desc)}"
+            except Exception:
+                gcal_url = "https://calendar.google.com"
+                
+            action_result = {
+                "action": "calendar_add",
+                "id": event_id,
+                "title": title,
+                "date": date,
+                "time": time_str,
+                "duration": duration,
+                "description": desc,
+                "gcal_url": gcal_url,
+                "events": db.get_calendar_events(user_id),
+                "message": f"Evento '{title}' agendado para el {date} a las {time_str}."
+            }
+        elif act_type in ["CALENDARIO_CONSULTAR", "CALENDAR_LIST", "AGENDA"]:
+            date_q = act_target.strip() if act_target.strip() not in ["todos", "all", ""] else None
+            if date_q in ["hoy", "today"]:
+                date_q = datetime.now().strftime("%Y-%m-%d")
+            elif date_q in ["mañana", "tomorrow"]:
+                date_q = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+            events = db.get_calendar_events(user_id, date_filter=date_q)
+            action_result = {
+                "action": "calendar_list",
+                "events": events,
+                "date": date_q,
+                "message": f"Se encontraron {len(events)} eventos en su agenda."
+            }
         elif act_type in ["CREAR_TAREA", "TAREA"]:
             task_id = db.add_task(user_id, act_target)
             action_result = {"action": "create_task", "id": task_id, "title": act_target, "tasks": db.get_tasks(user_id)}
@@ -541,6 +616,46 @@ def delete_task_endpoint(task_id):
     user_id = get_request_user_id()
     success = db.delete_task(user_id, task_id)
     return jsonify({"status": "ok" if success else "not_found", "tasks": db.get_tasks(user_id)})
+
+# === GOOGLE CALENDAR & AGENDA STARK ===
+@app.route('/calendar/events', methods=['GET', 'POST'])
+def manage_calendar_events():
+    user_id = get_request_user_id()
+    if request.method == 'POST':
+        data = request.json or {}
+        title = data.get('title', '').strip()
+        if not title:
+            return jsonify({"error": "Título requerido"}), 400
+        date = data.get('date', datetime.now().strftime("%Y-%m-%d"))
+        time_str = data.get('time', '09:00')
+        duration = int(data.get('duration_minutes', 60))
+        desc = data.get('description', '')
+        loc = data.get('location', '')
+        event_id = db.add_calendar_event(user_id, title, date, time_str, duration, desc, loc)
+        
+        try:
+            dt_start = datetime.strptime(f"{date} {time_str}", "%Y-%m-%d %H:%M")
+            dt_end = dt_start + timedelta(minutes=duration)
+            dates_param = f"{dt_start.strftime('%Y%m%dT%H%M00')}/{dt_end.strftime('%Y%m%dT%H%M00')}"
+            gcal_url = f"https://calendar.google.com/calendar/render?action=TEMPLATE&text={urllib.parse.quote(title)}&dates={dates_param}&details={urllib.parse.quote(desc)}"
+        except Exception:
+            gcal_url = "https://calendar.google.com"
+
+        return jsonify({
+            "status": "created",
+            "id": event_id,
+            "gcal_url": gcal_url,
+            "events": db.get_calendar_events(user_id)
+        })
+
+    date_filter = request.args.get('date')
+    return jsonify({"events": db.get_calendar_events(user_id, date_filter)})
+
+@app.route('/calendar/events/<int:event_id>', methods=['DELETE'])
+def delete_calendar_event_endpoint(event_id):
+    user_id = get_request_user_id()
+    success = db.delete_calendar_event(user_id, event_id)
+    return jsonify({"status": "ok" if success else "not_found", "events": db.get_calendar_events(user_id)})
 
 @app.route('/reset', methods=['POST'])
 def reset():

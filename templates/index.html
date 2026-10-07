@@ -185,6 +185,10 @@
         <span class="material-symbols-outlined text-xs">checklist</span>
         <span>TAREAS</span>
       </button>
+      <button onclick="openCalendarModal()" class="text-[10px] px-2.5 py-1 border border-[var(--border-color)] text-[var(--primary)] hover:bg-[var(--primary-dim)] transition-all flex items-center gap-1 font-bold" title="Agenda & Google Calendar">
+        <span class="material-symbols-outlined text-xs">calendar_month</span>
+        <span>CALENDARIO</span>
+      </button>
       <button onclick="openSettingsModal()" class="text-[10px] px-2.5 py-1 border border-[var(--border-color)] text-[var(--primary)] hover:bg-[var(--primary-dim)] transition-all flex items-center gap-1 font-bold" title="Ajustes de Perfil y Voz">
         <span class="material-symbols-outlined text-xs">tune</span>
         <span>AJUSTES</span>
@@ -221,6 +225,10 @@
     <div class="flex items-center gap-3 px-3 py-2.5 text-neutral-400 hover:bg-[var(--primary-dim)] hover:text-[var(--primary)] transition-all cursor-pointer" onclick="openTasksModal()">
       <span class="material-symbols-outlined text-sm">checklist</span>
       <span class="text-xs font-bold tracking-wider">MATRIZ TAREAS</span>
+    </div>
+    <div class="flex items-center gap-3 px-3 py-2.5 text-neutral-400 hover:bg-[var(--primary-dim)] hover:text-[var(--primary)] transition-all cursor-pointer" onclick="openCalendarModal()">
+      <span class="material-symbols-outlined text-sm">calendar_month</span>
+      <span class="text-xs font-bold tracking-wider">CALENDARIO</span>
     </div>
     <div class="flex items-center gap-3 px-3 py-2.5 text-neutral-400 hover:bg-[var(--primary-dim)] hover:text-[var(--primary)] transition-all cursor-pointer" onclick="openSettingsModal()">
       <span class="material-symbols-outlined text-sm">tune</span>
@@ -468,6 +476,53 @@
   </div>
 
   <button onclick="closeTasksModal()" class="mt-3 text-[10px] text-[var(--primary)]/60 hover:text-[var(--primary)] transition-colors tracking-widest">[ ESC PARA CERRAR ]</button>
+</div>
+
+<!-- ===== MATRIZ DE AGENDA & GOOGLE CALENDAR STARK OVERLAY ===== -->
+<div class="chat-overlay" id="calendarOverlay">
+  <div class="chat-container hud-bracket" style="max-width: 680px; height: 80vh;">
+    <!-- Calendar Header -->
+    <div class="px-4 py-3 border-b border-[var(--border-color)]/60 flex justify-between items-center text-[11px] bg-black/40">
+      <span class="text-[var(--primary)] font-bold flex items-center gap-2">
+        <span class="material-symbols-outlined text-base">calendar_month</span>
+        MATRIZ DE AGENDA & GOOGLE CALENDAR STARK
+      </span>
+      <div class="flex gap-2 items-center">
+        <a href="https://calendar.google.com" target="_blank" class="text-[9px] px-2 py-0.5 border border-[var(--primary)]/50 text-[var(--primary)] hover:bg-[var(--primary-dim)] font-bold transition-all flex items-center gap-1" title="Abrir Google Calendar completo">
+          <span>GOOGLE CALENDAR</span>
+          <span class="material-symbols-outlined text-[10px]">open_in_new</span>
+        </a>
+        <button onclick="loadCalendarEvents()" class="hover:text-[var(--primary)] transition-colors text-[10px]" title="Recargar">[ ACTUALIZAR ]</button>
+        <button onclick="closeCalendarModal()" class="hover:text-[var(--primary)] transition-colors text-[10px]">[ CERRAR ]</button>
+      </div>
+    </div>
+
+    <!-- Calendar Events List Window -->
+    <div class="flex-1 overflow-y-auto p-4 space-y-2.5" id="calendarEventsContainer">
+      <!-- Injected dynamically -->
+    </div>
+
+    <!-- Add Calendar Event Bar -->
+    <div class="p-3 border-t border-[var(--border-color)] bg-black/60 space-y-2 text-xs font-mono">
+      <div class="flex gap-2">
+        <input type="text" id="newCalTitle" placeholder="Título de la reunión o evento..." class="flex-1 bg-[var(--primary-dim)] border border-[var(--border-color)] p-2 text-[var(--primary-bright)] outline-none text-xs focus:border-[var(--primary)]">
+      </div>
+      <div class="flex gap-2">
+        <input type="date" id="newCalDate" class="bg-[#0a151b] border border-[var(--border-color)] p-1.5 text-[var(--primary)] text-xs outline-none">
+        <input type="time" id="newCalTime" value="09:00" class="bg-[#0a151b] border border-[var(--border-color)] p-1.5 text-[var(--primary)] text-xs outline-none">
+        <select id="newCalDuration" class="bg-[#0a151b] border border-[var(--border-color)] p-1.5 text-neutral-300 text-xs outline-none">
+          <option value="30">30 min</option>
+          <option value="60" selected>1 hora</option>
+          <option value="120">2 horas</option>
+        </select>
+        <button onclick="submitNewCalendarEvent()" class="px-4 py-1.5 bg-[var(--primary)] text-black font-bold text-xs hover:brightness-125 transition-all">
+          AGENDAR
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <button onclick="closeCalendarModal()" class="mt-3 text-[10px] text-[var(--primary)]/60 hover:text-[var(--primary)] transition-colors tracking-widest">[ ESC PARA CERRAR ]</button>
 </div>
 
 <!-- ===== AJUSTES DE PERFIL & VOZ STARK OVERLAY ===== -->
@@ -1255,6 +1310,77 @@ async function sendStream() {
         triggerNativeMaps(loc);
       } else if (finalAction.action === 'create_task' || finalAction.action === 'complete_task') {
         loadTasks();
+      } else if (finalAction.action === 'whatsapp_send') {
+        const target = finalAction.target || '';
+        const msg = finalAction.message || '';
+        const waUrl = finalAction.whatsapp_url || `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+        const waCard = document.createElement('div');
+        waCard.className = 'mt-3 p-3 border border-emerald-500/80 bg-black/90 rounded flex items-center justify-between gap-3 text-xs shadow-[0_0_15px_rgba(16,185,129,0.3)] hud-bracket';
+        waCard.innerHTML = `
+          <div class="flex items-center gap-2.5">
+            <span class="material-symbols-outlined text-base text-emerald-400 animate-pulse">chat</span>
+            <div>
+              <div class="text-[9px] text-emerald-400/70 tracking-widest font-bold">WHATSAPP PROTOCOL</div>
+              <div class="text-xs text-white font-bold">Para: <span class="text-emerald-400">${escapeHtml(target)}</span></div>
+              <div class="text-[11px] text-gray-300 italic truncate max-w-[200px]">"${escapeHtml(msg)}"</div>
+            </div>
+          </div>
+          <button onclick="window.open('${waUrl.replace(/'/g, "\\'")}', '_blank')" class="px-3 py-1 bg-emerald-950/60 border border-emerald-500 text-emerald-400 text-[10px] font-bold hover:bg-emerald-500 hover:text-black transition-all">
+            ENVIAR EN CHAT ↗
+          </button>
+        `;
+        botBubble.appendChild(waCard);
+        box.scrollTop = box.scrollHeight;
+      } else if (finalAction.action === 'whatsapp_call') {
+        const target = finalAction.target || '';
+        const waCard = document.createElement('div');
+        waCard.className = 'mt-3 p-3 border border-emerald-500/80 bg-black/90 rounded flex items-center justify-between gap-3 text-xs shadow-[0_0_15px_rgba(16,185,129,0.3)] hud-bracket';
+        waCard.innerHTML = `
+          <div class="flex items-center gap-2.5">
+            <span class="material-symbols-outlined text-base text-emerald-400 animate-pulse">ring_volume</span>
+            <div>
+              <div class="text-[9px] text-emerald-400/70 tracking-widest font-bold">LLAMADA VOIP WHATSAPP</div>
+              <div class="text-xs text-white font-bold">Llamando a: <span class="text-emerald-400">${escapeHtml(target)}</span></div>
+            </div>
+          </div>
+          <button onclick="window.open('https://api.whatsapp.com/send?phone=${encodeURIComponent(target)}', '_blank')" class="px-3 py-1 bg-emerald-950/60 border border-emerald-500 text-emerald-400 text-[10px] font-bold hover:bg-emerald-500 hover:text-black transition-all">
+            ABRIR WHATSAPP ↗
+          </button>
+        `;
+        botBubble.appendChild(waCard);
+        box.scrollTop = box.scrollHeight;
+      } else if (finalAction.action === 'calendar_add') {
+        const title = finalAction.title || 'Evento';
+        const dateStr = finalAction.date || '';
+        const timeStr = finalAction.time || '';
+        const gcalUrl = finalAction.google_calendar_url || '#';
+        const calCard = document.createElement('div');
+        calCard.className = 'mt-3 p-3 border border-amber-500/80 bg-black/90 rounded flex items-center justify-between gap-3 text-xs shadow-[0_0_15px_rgba(245,158,11,0.3)] hud-bracket';
+        calCard.innerHTML = `
+          <div class="flex items-center gap-2.5">
+            <span class="material-symbols-outlined text-base text-amber-400 animate-pulse">event_available</span>
+            <div>
+              <div class="text-[9px] text-amber-400/70 tracking-widest font-bold">GOOGLE CALENDAR & AGENDA STARK</div>
+              <div class="text-xs text-white font-bold">${escapeHtml(title)}</div>
+              <div class="text-[11px] text-amber-300 font-mono">${escapeHtml(dateStr)} ${escapeHtml(timeStr)}</div>
+            </div>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button onclick="openCalendarModal()" class="px-2 py-1 bg-amber-950/60 border border-amber-500/70 text-amber-400 text-[10px] font-bold hover:bg-amber-500 hover:text-black transition-all">
+              AGENDA
+            </button>
+            ${gcalUrl !== '#' ? `
+              <button onclick="window.open('${gcalUrl.replace(/'/g, "\\'")}', '_blank')" class="px-2 py-1 bg-amber-500 border border-amber-400 text-black text-[10px] font-bold hover:bg-white transition-all">
+                GOOGLE CALENDAR ↗
+              </button>
+            ` : ''}
+          </div>
+        `;
+        botBubble.appendChild(calCard);
+        box.scrollTop = box.scrollHeight;
+        loadCalendarEvents();
+      } else if (finalAction.action === 'calendar_list') {
+        openCalendarModal();
       }
     }
 
@@ -1522,6 +1648,129 @@ async function removeTask(id) {
 }
 
 // ==========================================
+// 7.5. STARK CALENDAR & AGENDA MATRIX
+// ==========================================
+function openCalendarModal() {
+  const modal = document.getElementById('calendarOverlay');
+  if (modal) modal.classList.add('active');
+  const dInput = document.getElementById('newCalDate');
+  if (dInput && !dInput.value) {
+    const today = new Date().toISOString().split('T')[0];
+    dInput.value = today;
+  }
+  loadCalendarEvents();
+}
+
+function closeCalendarModal() {
+  const modal = document.getElementById('calendarOverlay');
+  if (modal) modal.classList.remove('active');
+}
+
+async function loadCalendarEvents() {
+  const container = document.getElementById('calendarEventsContainer');
+  try {
+    const res = await fetch('/calendar/events', { headers: getAuthHeaders() });
+    const data = await res.json();
+    renderCalendarEvents(data.events || []);
+  } catch (err) {
+    if (container) {
+      container.innerHTML = `<div class="text-xs text-red-400 py-4 text-center font-mono">Fallo al enlazar con la agenda: ${err.message}</div>`;
+    }
+  }
+}
+
+function renderCalendarEvents(events) {
+  const container = document.getElementById('calendarEventsContainer');
+  if (!container) return;
+  if (!events || events.length === 0) {
+    container.innerHTML = `
+      <div class="text-center py-8 text-neutral-500 text-xs font-mono">
+        <span class="material-symbols-outlined text-3xl mb-1 text-amber-400/40">calendar_month</span>
+        <div>No hay eventos programados en la matriz, Señor.</div>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = events.map(e => {
+    const gcalUrl = e.google_calendar_url || `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(e.title || 'Evento')}`;
+    return `
+      <div class="flex items-center justify-between p-3 border border-[var(--border-color)] bg-black/60 rounded hud-bracket transition-all hover:border-amber-400/70 group">
+        <div class="flex items-center gap-3 flex-1 min-w-0">
+          <span class="material-symbols-outlined text-amber-400 text-lg flex-shrink-0">event</span>
+          <div class="truncate">
+            <div class="text-xs font-mono font-bold text-neutral-200 truncate">${escapeHtml(e.title || 'Sin título')}</div>
+            <div class="text-[10px] text-amber-400/80 font-mono">${escapeHtml(e.event_date || '')} ${escapeHtml(e.start_time || '')} (${e.duration_minutes || 60}m)</div>
+            ${e.description ? `<div class="text-[10px] text-neutral-400 truncate">${escapeHtml(e.description)}</div>` : ''}
+          </div>
+        </div>
+        <div class="flex items-center gap-2 ml-2 flex-shrink-0">
+          <button onclick="window.open('${gcalUrl.replace(/'/g, "\\'")}', '_blank')" class="px-2 py-1 bg-amber-500/20 border border-amber-500/60 text-amber-300 text-[10px] font-bold hover:bg-amber-500 hover:text-black transition-all" title="Abrir en Google Calendar">
+            GCAL ↗
+          </button>
+          <button onclick="removeCalendarEvent(${e.id})" class="text-neutral-500 hover:text-red-400 p-1 text-xs" title="Eliminar evento">
+            <span class="material-symbols-outlined text-sm">delete</span>
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function submitNewCalendarEvent() {
+  const titleInput = document.getElementById('newCalTitle');
+  const dateInput = document.getElementById('newCalDate');
+  const timeInput = document.getElementById('newCalTime');
+  const durInput = document.getElementById('newCalDuration');
+
+  const title = titleInput ? titleInput.value.trim() : '';
+  const date = dateInput ? dateInput.value : '';
+  const time = timeInput ? timeInput.value : '09:00';
+  const duration = durInput ? parseInt(durInput.value, 10) : 60;
+
+  if (!title) {
+    alert('Ingrese un título para el evento, Señor.');
+    return;
+  }
+  if (!date) {
+    alert('Seleccione una fecha para el evento, Señor.');
+    return;
+  }
+
+  try {
+    const res = await fetch('/calendar/events', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        title: title,
+        date: date,
+        time: time,
+        duration_minutes: duration,
+        description: 'Agendado mediante JARVIS Core'
+      })
+    });
+    const data = await res.json();
+    if (titleInput) titleInput.value = '';
+    renderCalendarEvents(data.events || []);
+  } catch (err) {
+    alert('Error al agendar evento: ' + err.message);
+  }
+}
+
+async function removeCalendarEvent(id) {
+  try {
+    const res = await fetch(`/calendar/events/${id}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders()
+    });
+    const data = await res.json();
+    renderCalendarEvents(data.events || []);
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+// ==========================================
 // 8. SETTINGS MODAL & PROFILE CONTROL
 // ==========================================
 function openSettingsModal() {
@@ -1746,6 +1995,7 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     closeChat();
     closeTasksModal();
+    closeCalendarModal();
     closeSettingsModal();
   }
 });
