@@ -59,6 +59,7 @@ class _HudScreenState extends State<HudScreen> {
   String? _lastActionKey;
   DateTime? _lastActionTime;
   bool _handsFree = false;
+  bool _isRestartingListening = false;
   Timer? _telemetryTimer;
 
   @override
@@ -79,7 +80,7 @@ class _HudScreenState extends State<HudScreen> {
     _startTelemetrySync();
 
     DeviceController.showNotification(
-      title: 'J.A.R.V.I.S. NEURAL CORE v1.2.2',
+      title: 'J.A.R.V.I.S. NEURAL CORE v1.2.3',
       content: 'Sistemas activos • En línea',
       isPlaying: false,
     );
@@ -143,29 +144,36 @@ class _HudScreenState extends State<HudScreen> {
     }
   }
 
+  void _scheduleListeningRestart({int delayMs = 1500}) {
+    if (_isRestartingListening || !_handsFree || !mounted) return;
+    _isRestartingListening = true;
+    Future.delayed(Duration(milliseconds: delayMs), () {
+      _isRestartingListening = false;
+      if (mounted && _handsFree && !_isSpeaking && !_isProcessing && !_speech.isListening) {
+        _startContinuousListening();
+      }
+    });
+  }
+
   Future<void> _initSpeech() async {
     try {
       _speechAvailable = await _speech.initialize(
         onError: (err) {
+          debugPrint('[Speech] Error: ${err.errorMsg}');
           if (mounted) setState(() => _isListening = false);
           if (_handsFree && mounted) {
-            Future.delayed(const Duration(seconds: 1), () {
-              if (mounted && _handsFree && !_isSpeaking && !_isProcessing) {
-                _startContinuousListening();
-              }
-            });
+            _scheduleListeningRestart(delayMs: 2500);
           }
         },
         onStatus: (status) {
+          debugPrint('[Speech] Status: $status');
           if (status == 'done' || status == 'notListening') {
             if (mounted) setState(() => _isListening = false);
             if (_handsFree && mounted) {
-              Future.delayed(const Duration(milliseconds: 500), () {
-                if (mounted && _handsFree && !_isSpeaking && !_isProcessing) {
-                  _startContinuousListening();
-                }
-              });
+              _scheduleListeningRestart(delayMs: 1500);
             }
+          } else if (status == 'listening') {
+            if (mounted) setState(() => _isListening = true);
           }
         },
       );
@@ -187,12 +195,12 @@ class _HudScreenState extends State<HudScreen> {
             side: const BorderSide(color: StarkConstants.starkGold),
           ),
           content: Text(
-            'AUTO-ESCUCHA ACTIVA: Diga "Hey Jarvis" o "Jarvis" para dar órdenes',
+            'AUTO-ESCUCHA ESTABLE: Diga "Hey Jarvis" o "Jarvis" para dar órdenes',
             style: GoogleFonts.shareTechMono(color: StarkConstants.starkGold, fontSize: 11),
           ),
         ),
       );
-      _startContinuousListening();
+      _scheduleListeningRestart(delayMs: 400);
     } else {
       _speech.stop();
       setState(() => _isListening = false);
@@ -200,10 +208,12 @@ class _HudScreenState extends State<HudScreen> {
   }
 
   void _startContinuousListening() {
-    if (!_speechAvailable || !_handsFree || _isSpeaking || _isProcessing) return;
+    if (!_speechAvailable || !_handsFree || _isSpeaking || _isProcessing || _speech.isListening) return;
     try {
       _speech.listen(
         listenOptions: stt.SpeechListenOptions(
+          pauseFor: const Duration(seconds: 4),
+          listenFor: const Duration(seconds: 30),
           cancelOnError: false,
           partialResults: true,
           listenMode: stt.ListenMode.dictation,
@@ -215,6 +225,7 @@ class _HudScreenState extends State<HudScreen> {
             if (lower.contains('jarvis') || lower.contains('oye jarvis') || lower.contains('hey jarvis')) {
               final clean = words.replaceAll(RegExp(r'\b(hey|oye|ok)?\s*jarvis\b[,:]?', caseSensitive: false), '').trim();
               if (clean.isNotEmpty) {
+                _speech.stop();
                 _sendMessage(clean);
               }
             }
@@ -246,11 +257,7 @@ class _HudScreenState extends State<HudScreen> {
             _musicPlayer.play();
           }
           if (_handsFree && mounted) {
-            Future.delayed(const Duration(milliseconds: 600), () {
-              if (mounted && _handsFree && !_isSpeaking && !_isProcessing) {
-                _startContinuousListening();
-              }
-            });
+            _scheduleListeningRestart(delayMs: 1200);
           }
         }
       }
@@ -326,6 +333,11 @@ class _HudScreenState extends State<HudScreen> {
     final text = (overrideText ?? _textController.text).trim();
     if (text.isEmpty || _isProcessing) return;
 
+    if (_speech.isListening) {
+      await _speech.stop();
+      if (mounted) setState(() => _isListening = false);
+    }
+
     _textController.clear();
     setState(() {
       _messages.add(ChatMessage(role: 'user', content: text));
@@ -365,10 +377,15 @@ class _HudScreenState extends State<HudScreen> {
         botMessage.content = 'Interferencia en la señal neuronal: $e';
       });
     } finally {
-      setState(() {
-        _isProcessing = false;
-      });
-      _scrollToBottom();
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+        _scrollToBottom();
+        if (_handsFree && !_isSpeaking) {
+          _scheduleListeningRestart(delayMs: 1200);
+        }
+      }
     }
   }
 
@@ -821,7 +838,7 @@ class _HudScreenState extends State<HudScreen> {
                     ),
                   ),
                   Text(
-                    'MARK VII • v1.2.2',
+                    'MARK VII • v1.2.3',
                     style: GoogleFonts.shareTechMono(
                       color: StarkConstants.textDim,
                       fontSize: 8,
