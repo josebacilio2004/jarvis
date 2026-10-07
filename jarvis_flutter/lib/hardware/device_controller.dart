@@ -327,6 +327,41 @@ class DeviceController {
     }
   }
 
+  /// Initiate WhatsApp video call to contact name or phone number
+  static Future<bool> makeWhatsAppVideoCall({
+    required String target,
+  }) async {
+    try {
+      final res = await _appChannel.invokeMethod<bool>('makeWhatsAppVideoCall', {
+        'target': target,
+      });
+      vibrate(80);
+      return res ?? false;
+    } catch (e) {
+      debugPrint('[DeviceController] Error making WhatsApp video call: $e');
+      return false;
+    }
+  }
+
+  /// Check if Jarvis Accessibility Service is active for autonomous WhatsApp auto-sending
+  static Future<bool> isAccessibilityServiceEnabled() async {
+    try {
+      final res = await _appChannel.invokeMethod<bool>('isAccessibilityServiceEnabled');
+      return res ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Open Android Accessibility Settings so the user can enable autonomous auto-sending
+  static Future<void> openAccessibilitySettings() async {
+    try {
+      await _appChannel.invokeMethod('openAccessibilitySettings');
+    } catch (e) {
+      debugPrint('[DeviceController] Error opening accessibility settings: $e');
+    }
+  }
+
   /// Add event to Google Calendar / Android native calendar
   static Future<bool> addCalendarEvent({
     required String title,

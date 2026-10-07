@@ -16,6 +16,7 @@ import android.os.Bundle
 import android.provider.CalendarContract
 import android.provider.ContactsContract
 import android.provider.MediaStore
+import android.provider.Settings
 import android.telephony.TelephonyManager
 import android.util.Log
 import android.widget.Toast
@@ -46,6 +47,7 @@ class MainActivity : FlutterActivity() {
     private var pendingResult: MethodChannel.Result? = null
     private var pendingCalendarEvent: CalendarEventData? = null
     private var pendingWhatsAppCallTarget: String? = null
+    private var pendingWhatsAppVideoCallTarget: String? = null
     private var pendingWhatsAppSendTarget: Pair<String, String>? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -141,6 +143,18 @@ class MainActivity : FlutterActivity() {
                     makeWhatsAppCall(target)
                     result.success(true)
                 }
+                "makeWhatsAppVideoCall" -> {
+                    val target = call.argument<String>("target") ?: ""
+                    makeWhatsAppVideoCall(target)
+                    result.success(true)
+                }
+                "openAccessibilitySettings" -> {
+                    openAccessibilitySettings()
+                    result.success(true)
+                }
+                "isAccessibilityServiceEnabled" -> {
+                    result.success(isAccessibilityServiceEnabled())
+                }
                 "addCalendarEvent" -> {
                     val title = call.argument<String>("title") ?: "Evento Stark"
                     val description = call.argument<String>("description")
@@ -154,6 +168,26 @@ class MainActivity : FlutterActivity() {
                     result.notImplemented()
                 }
             }
+        }
+    }
+
+    private fun isAccessibilityServiceEnabled(): Boolean {
+        if (JarvisAccessibilityService.isServiceActive) return true
+        val enabledServices = Settings.Secure.getString(
+            contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        ) ?: return false
+        return enabledServices.contains(packageName)
+    }
+
+    private fun openAccessibilitySettings() {
+        try {
+            val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            Log.e("JARVIS", "Failed to open accessibility settings: ${e.message}")
         }
     }
 
@@ -267,11 +301,15 @@ class MainActivity : FlutterActivity() {
                     pendingWhatsAppCallTarget?.let { target ->
                         makeWhatsAppCall(target)
                     }
+                    pendingWhatsAppVideoCallTarget?.let { target ->
+                        makeWhatsAppVideoCall(target)
+                    }
                     pendingWhatsAppSendTarget?.let { (target, msg) ->
                         sendWhatsApp(target, msg)
                     }
                 }
                 pendingWhatsAppCallTarget = null
+                pendingWhatsAppVideoCallTarget = null
                 pendingWhatsAppSendTarget = null
             }
             PERMISSIONS_REQ_CODE -> {
@@ -472,6 +510,87 @@ class MainActivity : FlutterActivity() {
         return null
     }
 
+    private fun findWhatsAppVideoCallDataId(target: String, cleanPhone: String?): Long? {
+        if (checkSelfPermission(Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
+            return null
+        }
+
+        val trimmedTarget = target.trim()
+
+        // 1. Direct match on WhatsApp Video Call MIME type by DISPLAY_NAME
+        try {
+            contentResolver.query(
+                ContactsContract.Data.CONTENT_URI,
+                arrayOf(ContactsContract.Data._ID),
+                "${ContactsContract.Data.MIMETYPE} = ? AND ${ContactsContract.Data.DISPLAY_NAME} LIKE ?",
+                arrayOf("vnd.android.cursor.item/vnd.com.whatsapp.video.call", "%$trimmedTarget%"),
+                null
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    return cursor.getLong(0)
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("JARVIS", "VideoCall query by name error: ${e.message}")
+        }
+
+        // 2. Direct match by phone digits in DATA1
+        if (!cleanPhone.isNullOrBlank()) {
+            try {
+                val last7 = if (cleanPhone.length >= 7) cleanPhone.takeLast(7) else cleanPhone
+                contentResolver.query(
+                    ContactsContract.Data.CONTENT_URI,
+                    arrayOf(ContactsContract.Data._ID),
+                    "${ContactsContract.Data.MIMETYPE} = ? AND ${ContactsContract.Data.DATA1} LIKE ?",
+                    arrayOf("vnd.android.cursor.item/vnd.com.whatsapp.video.call", "%$last7%"),
+                    null
+                )?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        return cursor.getLong(0)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w("JARVIS", "VideoCall query by DATA1 error: ${e.message}")
+            }
+        }
+
+        // 3. Resolve Contact ID first, then get WhatsApp Video Call row ID
+        try {
+            val filterUri = Uri.withAppendedPath(
+                ContactsContract.CommonDataKinds.Phone.CONTENT_FILTER_URI,
+                Uri.encode(trimmedTarget)
+            )
+            var contactId: Long? = null
+            contentResolver.query(
+                filterUri,
+                arrayOf(ContactsContract.CommonDataKinds.Phone.CONTACT_ID),
+                null, null, null
+            )?.use { c ->
+                if (c.moveToFirst()) {
+                    contactId = c.getLong(0)
+                }
+            }
+
+            if (contactId != null) {
+                contentResolver.query(
+                    ContactsContract.Data.CONTENT_URI,
+                    arrayOf(ContactsContract.Data._ID),
+                    "${ContactsContract.Data.CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ?",
+                    arrayOf(contactId.toString(), "vnd.android.cursor.item/vnd.com.whatsapp.video.call"),
+                    null
+                )?.use { c ->
+                    if (c.moveToFirst()) {
+                        return c.getLong(0)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("JARVIS", "VideoCall query by Contact ID error: ${e.message}")
+        }
+
+        return null
+    }
+
     private fun makeWhatsAppCall(target: String) {
         if (checkSelfPermission(Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
             pendingWhatsAppCallTarget = target
@@ -529,12 +648,66 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private fun makeWhatsAppVideoCall(target: String) {
+        if (checkSelfPermission(Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
+            pendingWhatsAppVideoCallTarget = target
+            requestPermissions(arrayOf(Manifest.permission.READ_CONTACTS), CONTACTS_REQ_CODE)
+            return
+        }
+
+        val phone = resolvePhoneNumber(target)
+        val cleanPhone = if (!phone.isNullOrBlank()) formatWhatsAppPhone(phone) else null
+        val videoDataId = findWhatsAppVideoCallDataId(target, cleanPhone)
+
+        if (videoDataId != null) {
+            try {
+                val intent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(
+                        Uri.parse("content://com.android.contacts/data/$videoDataId"),
+                        "vnd.android.cursor.item/vnd.com.whatsapp.video.call"
+                    )
+                    setPackage("com.whatsapp")
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                startActivity(intent)
+                runOnUiThread {
+                    Toast.makeText(this, "Iniciando videollamada de WhatsApp con $target...", Toast.LENGTH_SHORT).show()
+                }
+                return
+            } catch (e: Exception) {
+                Log.e("JARVIS", "Error launching direct WhatsApp Video Call: ${e.message}")
+            }
+        }
+
+        // Fallback: Open direct chat with phone number
+        if (!cleanPhone.isNullOrBlank() && cleanPhone.length >= 8) {
+            try {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://api.whatsapp.com/send?phone=$cleanPhone")).apply {
+                    setPackage("com.whatsapp")
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                startActivity(intent)
+                runOnUiThread {
+                    Toast.makeText(this, "Abriendo WhatsApp con $target...", Toast.LENGTH_SHORT).show()
+                }
+                return
+            } catch (e: Exception) {}
+        }
+
+        runOnUiThread {
+            Toast.makeText(this, "Contacto '$target' no encontrado para videollamada de WhatsApp", Toast.LENGTH_LONG).show()
+        }
+    }
+
     private fun sendWhatsApp(target: String, message: String) {
         if (checkSelfPermission(Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
             pendingWhatsAppSendTarget = Pair(target, message)
             requestPermissions(arrayOf(Manifest.permission.READ_CONTACTS), CONTACTS_REQ_CODE)
             return
         }
+
+        // Activate autonomous auto-send flag in AccessibilityService
+        JarvisAccessibilityService.pendingAutoSend = true
 
         val phone = resolvePhoneNumber(target)
         val cleanPhone = if (!phone.isNullOrBlank()) formatWhatsAppPhone(phone) else null
@@ -547,11 +720,15 @@ class MainActivity : FlutterActivity() {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
                 }
                 startActivity(intent)
+                
                 runOnUiThread {
-                    Toast.makeText(this, "Abriendo WhatsApp con $target...", Toast.LENGTH_SHORT).show()
+                    if (isAccessibilityServiceEnabled()) {
+                        Toast.makeText(this, "✓ J.A.R.V.I.S. transmitiendo y enviando a $target...", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(this, "Mensaje preparado. Para envío 100% automático sin tocar 'Enviar', active la Accesibilidad de J.A.R.V.I.S.", Toast.LENGTH_LONG).show()
+                    }
                 }
             } else {
-                // If contact was not resolved by name, open WhatsApp with text and ask to select
                 val url = "whatsapp://send?text=${Uri.encode(message)}"
                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
                     setPackage("com.whatsapp")

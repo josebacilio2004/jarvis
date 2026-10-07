@@ -1349,6 +1349,24 @@ async function sendStream() {
         `;
         botBubble.appendChild(waCard);
         box.scrollTop = box.scrollHeight;
+      } else if (finalAction.action === 'whatsapp_videocall') {
+        const target = finalAction.target || '';
+        const waCard = document.createElement('div');
+        waCard.className = 'mt-3 p-3 border border-emerald-500/80 bg-black/90 rounded flex items-center justify-between gap-3 text-xs shadow-[0_0_15px_rgba(16,185,129,0.3)] hud-bracket';
+        waCard.innerHTML = `
+          <div class="flex items-center gap-2.5">
+            <span class="material-symbols-outlined text-base text-emerald-400 animate-pulse">videocam</span>
+            <div>
+              <div class="text-[9px] text-emerald-400/70 tracking-widest font-bold">VIDEOLLAMADA WHATSAPP</div>
+              <div class="text-xs text-white font-bold">Videollamada a: <span class="text-emerald-400">${escapeHtml(target)}</span></div>
+            </div>
+          </div>
+          <button onclick="window.open('https://api.whatsapp.com/send?phone=${encodeURIComponent(target)}', '_blank')" class="px-3 py-1 bg-emerald-950/60 border border-emerald-500 text-emerald-400 text-[10px] font-bold hover:bg-emerald-500 hover:text-black transition-all">
+            ABRIR WHATSAPP ↗
+          </button>
+        `;
+        botBubble.appendChild(waCard);
+        box.scrollTop = box.scrollHeight;
       } else if (finalAction.action === 'calendar_add') {
         const title = finalAction.title || 'Evento';
         const dateStr = finalAction.date || '';

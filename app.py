@@ -76,6 +76,8 @@ CAPACIDADES MULTIMEDIA Y PROTOCOLOS DE ACCIÓN:
 [ACCION:WHATSAPP:contacto_o_numero|mensaje]
 - Si te pide llamar o hacer una llamada por WhatsApp ("llama por whatsapp a X", "haz una llamada de whatsapp a X"):
 [ACCION:WHATSAPP_LLAMAR:contacto_o_numero]
+- Si te pide hacer una videollamada por WhatsApp ("haz una videollamada por whatsapp a X", "videollamada a X por whatsapp", "llama por video a X"):
+[ACCION:WHATSAPP_VIDEOLLAMADA:contacto_o_numero]
 - Si te pide agendar, programar o guardar un evento o cita en el calendario o Google Calendar ("agenda una reunión mañana a las 4pm sobre...", "crea un evento en mi calendario el viernes a las 10:00", "programa cita médica"):
 [ACCION:CALENDARIO:titulo|YYYY-MM-DD|HH:MM|duracion_minutos|descripcion]
 - Si te pregunta por su agenda o eventos del calendario ("¿qué tengo en mi agenda?", "¿cuáles son mis próximos eventos?", "¿qué tengo para hoy/mañana?"):
@@ -224,6 +226,12 @@ def execute_embedded_actions(text: str, user_id: str):
                 "action": "whatsapp_call",
                 "target": act_target,
                 "message": f"Iniciando enlace de llamada por WhatsApp con {act_target}."
+            }
+        elif act_type in ["WHATSAPP_VIDEOLLAMADA", "WHATSAPP_VIDEO", "WHATSAPP_VIDEOCALL"]:
+            action_result = {
+                "action": "whatsapp_videocall",
+                "target": act_target,
+                "message": f"Iniciando enlace de videollamada por WhatsApp con {act_target}."
             }
         elif act_type in ["CALENDARIO", "CALENDAR", "CALENDARIO_AGENDAR", "AGENDAR"]:
             parts = act_target.split("|")

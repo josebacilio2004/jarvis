@@ -79,7 +79,7 @@ class _HudScreenState extends State<HudScreen> {
     _startTelemetrySync();
 
     DeviceController.showNotification(
-      title: 'J.A.R.V.I.S. NEURAL CORE v1.2.1',
+      title: 'J.A.R.V.I.S. NEURAL CORE v1.2.2',
       content: 'Sistemas activos • En línea',
       isPlaying: false,
     );
@@ -474,6 +474,13 @@ class _HudScreenState extends State<HudScreen> {
         }
         break;
 
+      case 'whatsapp_videocall':
+        final target = action['target'] as String? ?? '';
+        if (target.isNotEmpty) {
+          await DeviceController.makeWhatsAppVideoCall(target: target);
+        }
+        break;
+
       case 'calendar_add':
         final title = action['title'] as String? ?? 'Evento Stark';
         final dateStr = action['date'] as String? ?? '';
@@ -671,6 +678,34 @@ class _HudScreenState extends State<HudScreen> {
                 focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: StarkConstants.primaryCyan)),
               ),
             ),
+            const SizedBox(height: 16),
+            InkWell(
+              onTap: () => DeviceController.openAccessibilitySettings(),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF25D366).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: const Color(0xFF25D366).withValues(alpha: 0.6)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.accessibility_new, color: Color(0xFF25D366), size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('ENVÍO AUTÓNOMO DE WHATSAPP', style: GoogleFonts.orbitron(color: const Color(0xFF25D366), fontSize: 9, fontWeight: FontWeight.bold)),
+                          Text('Tocar para activar Accesibilidad de J.A.R.V.I.S.', style: GoogleFonts.shareTechMono(color: Colors.white70, fontSize: 8)),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.arrow_forward_ios, color: Color(0xFF25D366), size: 12),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
         actions: [
@@ -786,7 +821,7 @@ class _HudScreenState extends State<HudScreen> {
                     ),
                   ),
                   Text(
-                    'MARK VII • v1.2.1',
+                    'MARK VII • v1.2.2',
                     style: GoogleFonts.shareTechMono(
                       color: StarkConstants.textDim,
                       fontSize: 8,
@@ -1159,6 +1194,40 @@ class _HudScreenState extends State<HudScreen> {
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text('LLAMAR', style: GoogleFonts.orbitron(color: Colors.black, fontSize: 9, fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ],
+        ),
+      );
+    } else if (type == 'whatsapp_videocall') {
+      final target = action['target'] as String? ?? '';
+      return Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: const Color(0xFF25D366).withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: const Color(0xFF25D366).withValues(alpha: 0.5)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.videocam, color: Color(0xFF25D366), size: 16),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'VIDEOLLAMADA WHATSAPP: $target',
+                style: GoogleFonts.shareTechMono(color: const Color(0xFF25D366), fontSize: 10, fontWeight: FontWeight.bold),
+              ),
+            ),
+            const SizedBox(width: 6),
+            InkWell(
+              onTap: () => DeviceController.makeWhatsAppVideoCall(target: target),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF25D366),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text('VIDEO', style: GoogleFonts.orbitron(color: Colors.black, fontSize: 9, fontWeight: FontWeight.bold)),
               ),
             ),
           ],
