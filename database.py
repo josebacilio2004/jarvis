@@ -1,9 +1,12 @@
 import os
 import sqlite3
 from datetime import datetime
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Environment-based Connection Strings
-MONGODB_URI = os.getenv("MONGODB_URI", "")
+MONGODB_URI = os.getenv("MONGODB_URI", "") or os.getenv("MONGO_URI", "")
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 
 DB_TYPE = "sqlite"

@@ -11,12 +11,12 @@ from google import genai
 from google.genai import types
 from dotenv import load_dotenv
 
+# === CONFIGURACIÓN ===
+load_dotenv()
+
 import database as db
 import os_control
 import tts_engine
-
-# === CONFIGURACIÓN ===
-load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
